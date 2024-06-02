@@ -135,19 +135,19 @@ def transfer_data_idx(data, gene2id_map, id2cancer_map):
     return df
 
 
-def clear_log(log_fp):
+def clear_result(result_fp):
 
-    if os.path.exists(log_fp):
-        os.remove(log_fp)
+    if os.path.exists(result_fp):
+        os.remove(result_fp)
 
 
-def average_metrics(log_fp):
+def average_metrics(result_fp):
 
-    log = pd.read_csv(log_fp)
+    log = pd.read_csv(result_fp)
     mean = np.round(log.mean(),4)
     std = np.round(log.std(),4)
     res = [str(mean[i])+" ("+str(std[i])+")" for i in range(len(mean))]
-    with open(log_fp,'a+') as f:
+    with open(result_fp,'a+') as f:
         csv_write = csv.writer(f)
         csv_write.writerow(res)
 

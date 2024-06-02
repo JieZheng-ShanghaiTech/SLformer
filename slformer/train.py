@@ -26,7 +26,7 @@ def training_info(loss_record, step):
     return info
 
 
-def train(device, model, criterion, m, args, train_loader, model_save_path, log_path, test_loader=None, save_model=False, save_log=True, model_class="geneformer"):
+def train(device, model, criterion, m, args, train_loader, model_save_path, result_path, test_loader=None, save_model=False, save_result=True, model_class="geneformer"):
 
     epoch_start_time = time.time()
 
@@ -37,6 +37,7 @@ def train(device, model, criterion, m, args, train_loader, model_save_path, log_
 
     optimizer = torch.optim.Adam(model.parameters(), lr=args.lr, betas=args.betas, eps=args.eps, weight_decay=args.weight_decay)
 
+    device = torch.device("cuda:" + str(args.device))
     model = model.to(device)
 
     for epoch in range(1, args.epochs + 1):
@@ -181,11 +182,11 @@ def train(device, model, criterion, m, args, train_loader, model_save_path, log_
                 best_train_record, best_test_record = best_metric_record
                 print(training_info(best_train_record, len(train_loader))+training_info(best_test_record, len(test_loader)))
 
-                # save best training info
-                if save_log:
-                    if not os.path.exists(log_path):
-                        create_csv(log_path, list(best_train_record.keys())+list(best_test_record.keys()))
-                    with open(log_path,'a+') as f:
+                # save best training performance
+                if save_result:
+                    if not os.path.exists(result_path):
+                        create_csv(result_path, list(best_train_record.keys())+list(best_test_record.keys()))
+                    with open(result_path,'a+') as f:
                         csv_write = csv.writer(f)
                         csv_write.writerow(
                             [i/len(train_loader) for i in list(best_train_record.values())]+[i/len(test_loader) for i in list(best_test_record.values())]

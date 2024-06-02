@@ -39,7 +39,7 @@ class Transformer_Finetuner(nn.Module):
             self.cross_att_layer = CrossAttentionBlock(config['d_model'], config['att_nhead'], pooling=False)
             self.mlp_input_dim = config['d_model']*4
         
-        self.predictor = MLP(num_layers=2, input_dim=self.mlp_input_dim, hidden_dim=config['mlp_hidden_dim'], output_dim=1, use_selayer=False)
+        self.predictor = MLP(num_layers=2, input_dim=self.mlp_input_dim, hidden_dim=config['mlp_hidden_dim'], output_dim=1)
         # self.predictor = ResNetClassifier(config['d_model']*2)
 
 
