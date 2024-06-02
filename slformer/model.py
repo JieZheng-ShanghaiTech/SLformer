@@ -3,7 +3,7 @@ import torch.nn as nn
 import torch.nn.functional as F
 from torch.nn.utils.weight_norm import weight_norm
 import math
-
+from torch_scatter import scatter_mean
 
 class Transformer_Finetuner(nn.Module):
 
@@ -36,10 +36,11 @@ class Transformer_Finetuner(nn.Module):
         self.mlp_input_dim = config['d_model']*2
 
         if self.config['add_att']:
-            self.cross_att_layer = CrossAttentionBlock(config['d_model'], config['att_nhead'], pooling=False)
+            # self.cross_att_layer = CrossAttentionBlock(hidden_dim=config['d_model'], num_heads=config['att_nhead'], pooling=False)
+            self.fusion_model = CrossAttention(config['d_model'], num_layers=1, num_heads=config['att_nhead'], batch_norm=False, activation="relu")
             self.mlp_input_dim = config['d_model']*4
         
-        self.predictor = MLP(num_layers=2, input_dim=self.mlp_input_dim, hidden_dim=config['mlp_hidden_dim'], output_dim=1, use_selayer=False)
+        self.predictor = MLP(num_layers=2, input_dim=self.mlp_input_dim, hidden_dim=config['mlp_hidden_dim'], output_dim=1)
         # self.predictor = ResNetClassifier(config['d_model']*2)
 
 
@@ -61,8 +62,9 @@ class Transformer_Finetuner(nn.Module):
             h_total.append(h)   
         
         if self.config['add_att']:
-            att11, att22, att12, att21, output_total = self.cross_att_layer(h_total[0].transpose(0,1), h_total[1].transpose(0,1), output_att=True)
-            h_total = output_total
+            # att11, att22, att12, att21, output_total = self.cross_att_layer(h_total[0].transpose(0,1), h_total[1].transpose(0,1), output_att=True)
+            fusion_output = self.fusion_model(h_total[0], h_total[1])
+            h_total = fusion_output
         else:
             h_total = torch.cat(h_total, dim=1) # [512, 512]
         # else:
@@ -102,7 +104,7 @@ class PositionalEncoding(nn.Module):
 
 class CrossAttentionBlock(nn.Module):
 
-    def __init__(self, hidden_dim, num_heads, pooling):
+    def __init__(self, hidden_dim, num_heads):
         super(CrossAttentionBlock, self).__init__()
         if hidden_dim % num_heads != 0:
             raise ValueError(
@@ -112,12 +114,12 @@ class CrossAttentionBlock(nn.Module):
         self.num_heads = num_heads
         self.head_size = hidden_dim // num_heads
 
-        self.pooling=pooling
-        if self.pooling:
-            self.conv_layers = nn.ModuleList()
-            for i in range(4):
-                self.conv_layers.append(nn.Conv1d(in_channels=self.hidden_dim,out_channels=self.hidden_dim,
-                                                  kernel_size=2))
+        # self.pooling=pooling
+        # if self.pooling:
+        #     self.conv_layers = nn.ModuleList()
+        #     for i in range(4):
+        #         self.conv_layers.append(nn.Conv1d(in_channels=self.hidden_dim,out_channels=self.hidden_dim,
+        #                                           kernel_size=2))
 
         self.query1 = nn.Linear(hidden_dim, hidden_dim, bias=False)
         self.key1 = nn.Linear(hidden_dim, hidden_dim, bias=False)
@@ -126,6 +128,8 @@ class CrossAttentionBlock(nn.Module):
         self.query2 = nn.Linear(hidden_dim, hidden_dim, bias=False)
         self.key2 = nn.Linear(hidden_dim, hidden_dim, bias=False)
         self.value2 = nn.Linear(hidden_dim, hidden_dim, bias=False)
+
+
 
     def _alpha_from_logits(self, logits, mask_row, mask_col, inf=1e6):
         N, L1, L2, H = logits.shape
@@ -144,7 +148,7 @@ class CrossAttentionBlock(nn.Module):
         return x.view(*s)
 
     # def forward(self, input1, input2, mask1, mask2):
-    def forward(self, input1, input2, output_att=True):
+    def forward(self, input1, input2):
         query1 = self._heads(self.query1(input1), self.num_heads, self.head_size)   #[512, 201, 2, 128]
         key1 = self._heads(self.key1(input1), self.num_heads, self.head_size)
         query2 = self._heads(self.query2(input2), self.num_heads, self.head_size)
@@ -154,39 +158,91 @@ class CrossAttentionBlock(nn.Module):
         logits21 = torch.einsum('blhd, bkhd->blkh', query2, key1)
         logits22 = torch.einsum('blhd, bkhd->blkh', query2, key2)
 
-        # alpha11 = self._alpha_from_logits(logits11, mask1, mask1)
-        # alpha12 = self._alpha_from_logits(logits12, mask1, mask2)
-        # alpha21 = self._alpha_from_logits(logits21, mask2, mask1)
-        # alpha22 = self._alpha_from_logits(logits22, mask2, mask2)
+        att11 = torch.softmax(logits11, dim=2)
+        att12 = torch.softmax(logits12, dim=2)
+        att21 = torch.softmax(logits21, dim=2)
+        att22 = torch.softmax(logits22, dim=2)
+
 
         value1 = self._heads(self.value1(input1), self.num_heads, self.head_size)
         value2 = self._heads(self.value2(input2), self.num_heads, self.head_size)
-        self_out1 = torch.einsum('blkh, bkhd->blhd', logits11, value1).flatten(-2)
-        self_out2 = torch.einsum('blkh, bkhd->blhd', logits22, value2).flatten(-2)
-        cross_out1 = (torch.einsum('blkh, bkhd->blhd', logits11, value1).flatten(-2) +
-                   torch.einsum('blkh, bkhd->blhd', logits12, value2).flatten(-2)) / 2
-        cross_out2 = (torch.einsum('blkh, bkhd->blhd', logits21, value1).flatten(-2) +
-                   torch.einsum('blkh, bkhd->blhd', logits22, value2).flatten(-2)) / 2
+        # self_out1 = torch.einsum('blkh, bkhd->blhd', logits11, value1).flatten(-2)
+        # self_out2 = torch.einsum('blkh, bkhd->blhd', logits22, value2).flatten(-2)
+        cross_out1 = (torch.einsum('blkh, bkhd->blhd', att11, value1).flatten(-2) +
+                   torch.einsum('blkh, bkhd->blhd', att12, value2).flatten(-2)) / 2
+        cross_out2 = (torch.einsum('blkh, bkhd->blhd', att21, value1).flatten(-2) +
+                   torch.einsum('blkh, bkhd->blhd', att22, value2).flatten(-2)) / 2
         
-        output = []
-        # [512, 201, 256]*2
-        for i, out in enumerate([self_out1, self_out2, cross_out1, cross_out2]):
-            if self.pooling:
-                # Conv1D
-                output.append(self.conv_layers[i](out.transpose(1,2)).mean(dim=2).squeeze())
-            else:
-                output.append(out[:,0,:].squeeze())
+        return cross_out1, cross_out2
+        
+        # output = []
+        # # [512, 201, 256]*2
+        # for i, out in enumerate([self_out1, self_out2, cross_out1, cross_out2]):
+        #     if self.pooling:
+        #         # Conv1D
+        #         output.append(self.conv_layers[i](out.transpose(1,2)).mean(dim=2).squeeze())
+        #     else:
+        #         output.append(out[:,0,:].squeeze())
 
-        output_total = torch.cat(output, dim=1) #[512, dim*4]
+        # output_total = torch.cat(output, dim=1) #[512, dim*4]
 
-        if not output_att:
-            return output_total
+        # if not output_att:
+        #     return output_total
+        # else:
+        #     att11 = nn.functional.softmax(logits11, dim=2)
+        #     att22 = nn.functional.softmax(logits22, dim=2)
+        #     att12 = nn.functional.softmax(logits12, dim=2)
+        #     att21 = nn.functional.softmax(logits21, dim=2)
+        #     return att11, att22, att12, att21, output_total
+        
+
+class CrossAttention(nn.Module):
+
+    def __init__(self, hidden_dim=512, num_layers=1, num_heads=8, batch_norm=False, activation="relu"):
+        super(CrossAttention, self).__init__()
+        self.hidden_dim = hidden_dim
+        self.num_layers = num_layers
+        self.num_heads = num_heads
+        self.batch_norm = batch_norm
+
+        self.layers = nn.ModuleList()
+        for _ in range(self.num_layers):
+            self.layers.append(CrossAttentionBlock(hidden_dim, num_heads))
+
+        if batch_norm:
+            self.protein_batch_norm_layers = nn.ModuleList()
+            self.text_batch_norm_layers = nn.ModuleList()
+            for _ in range(self.num_layers):
+                self.protein_batch_norm_layers.append(nn.BatchNorm1d(hidden_dim))
+                self.text_batch_norm_layers.append(nn.BatchNorm1d(hidden_dim))
+
+        if isinstance(activation, str):
+            self.activation = getattr(F, activation)
         else:
-            att11 = nn.functional.softmax(logits11, dim=2)
-            att22 = nn.functional.softmax(logits22, dim=2)
-            att12 = nn.functional.softmax(logits12, dim=2)
-            att21 = nn.functional.softmax(logits21, dim=2)
-            return att11, att22, att12, att21, output_total
+            self.activation = activation
+
+    def forward(self, protein_input, text_input, all_loss=None, metric=None):
+        # Padding for protein inputs
+        # protein_input, protein_mask = variadic_to_padded(protein_input, graph.num_residues, value=0)
+
+        for i, layer in enumerate(self.layers):
+            protein_input, text_input = layer(protein_input, text_input)
+            if self.batch_norm:
+                protein_input = self.protein_batch_norm_layers[i](protein_input.transpose(1, 2)).transpose(1, 2)
+                text_input = self.text_batch_norm_layers[i](text_input.transpose(1, 2)).transpose(1, 2)
+            if self.activation:
+                protein_input = self.activation(protein_input)
+                text_input = self.activation(text_input)
+
+        protein_output = protein_input
+        text_output = text_input
+
+        return torch.cat([protein_output, text_output], dim=-1)
+
+        # return {
+        #     "gene1": protein_output,
+        #     "gene2": text_output
+        # }
 
 
 
