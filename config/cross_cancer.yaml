@@ -9,6 +9,7 @@ geneformer_emb_dir: ./data/TISCH2/geneformer_emb
 SL_data_dir: ./data/SL_data
 
 # model_type = "geneformer" or "transformer"
+# model_type: geneformer
 model_type: transformer
 
 # task = cancer_specific, mix, or cross_cancer

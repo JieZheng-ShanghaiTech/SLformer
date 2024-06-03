@@ -82,10 +82,8 @@ def train(device, model, criterion, m, args, train_loader, model_save_path, resu
                 mask2_cuda = mask2.to(device)
             label = label.to(torch.float32)
 
-
             optimizer.zero_grad()
 
-                
             if model_class == "geneformer":
                 output = model(total_emb_cuda)
                 out = torch.squeeze(m(output))

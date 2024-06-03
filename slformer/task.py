@@ -80,7 +80,7 @@ class Validation_Experiment():
         if save_model:
             create_dir(model_root_dir)
             
-        sys.stdout = open(log_fp, 'w')
+        # sys.stdout = open(log_fp, 'w')
 
         params = {}
         params.update(vars(self.args))
@@ -142,7 +142,7 @@ class Validation_Experiment():
                 # get average results
                 average_metrics(result_path)
         
-        sys.stdout = sys.__stdout__
+        # sys.stdout = sys.__stdout__
 
 
     def save_train_test_data(self, data_total, cancer_type):
@@ -183,7 +183,6 @@ class Validation_Experiment():
                 df_train = transfer_data_idx(data_train, self.gene2id_map, self.id2cancer_map)
                 df_test.to_csv(os.path.join(save_dir, f"test_transfer_{cancer_name}.csv"), index=False)
                 df_train.to_csv(os.path.join(save_dir, f"train_transfer_{cancer_name}.csv"), index=False)
-
 
 
     # def get_random_auc(self, data_total):
