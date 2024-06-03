@@ -6,8 +6,10 @@ import pickle as pkl
 import os
 import torch
 import time
+import sys
+import json
 
-from util import set_seed, create_dir, ndcg, ndcg_bin, calc_random_auc, get_train_test_SL, transfer_data_idx, average_metrics, clear_log
+from util import set_seed, create_dir, ndcg, ndcg_bin, calc_random_auc, get_train_test_SL, transfer_data_idx, average_metrics, clear_result
 from train import train
 from model import MLP, Transformer_Finetuner
 from dataloader import load_train_data_SL
@@ -57,7 +59,7 @@ class Validation_Experiment():
         }
 
 
-    def run_experiment(self, save_model=False, save_log=True):
+    def run_experiment(self, save_model=False, save_result=True):
 
         if self.model_class == 'transformer':
             self.config_transformer()
@@ -65,22 +67,34 @@ class Validation_Experiment():
         criterion = torch.nn.BCELoss()
         m = torch.nn.Sigmoid()
 
-        # experiment_dir = os.path.join(self.config.EXPERIMENT_DIR, time.strftime('%Y-%m-%d-%H:%M:%S', time.localtime()))
-        experiment_dir = os.path.join(self.config.EXPERIMENT_DIR, f"{self.experiment}_{self.model_class}_n{self.args.n}")
-        log_root_dir = os.path.join(experiment_dir, "log")
+        # save path of experiment results, models, logs, and params    
+        experiment_dir = os.path.join(self.config.EXPERIMENT_DIR, f"{self.experiment}", f"{self.model_class}", time.strftime('%Y-%m-%d-%H:%M:%S', time.localtime()))
+        result_root_dir = os.path.join(experiment_dir, "result")
         model_root_dir = os.path.join(experiment_dir, "model")
+        log_fp = os.path.join(experiment_dir, "log.txt")
+        params_fp = os.path.join(experiment_dir, "params.json")
+
         create_dir(experiment_dir)
-        if save_log:
-            create_dir(log_root_dir)
+        if save_result:
+            create_dir(result_root_dir)
         if save_model:
             create_dir(model_root_dir)
+            
+        sys.stdout = open(log_fp, 'w')
 
+        params = {}
+        params.update(vars(self.args))
+        params.update(self.config)
+        with open(params_fp, "w") as f:
+            json.dump(params, f, indent=4)
+
+        # Start experiment
         if self.experiment == 'cancer_specific' or self.experiment == 'mix':
 
             for cancer_type in self.config.task.cancer:
             
-                log_path = os.path.join(log_root_dir, f"train_log_{cancer_type}.csv")
-                clear_log(log_path)
+                result_path = os.path.join(result_root_dir, f"train_result_{cancer_type}.csv")
+                clear_result(result_path)
                 
                 for cv in range(1,6):
                     data_test = np.load(os.path.join(self.config.SAVED_DATA_DIR, "SL_train_test_data", self.experiment, f"test_{cancer_type}_fold_{cv}.npy"))
@@ -95,10 +109,10 @@ class Validation_Experiment():
                         train_loader, test_loader = load_train_data_SL(data_test, data_train, self.gene_sent_map, self.args.batch_size, bi_rpr=True, sent_mask=self.sent_mask_map, emb_mtx=self.geneformer_emb_mtx)
                         model = Transformer_Finetuner(config=self.transformer_config)
 
-                    train(self.args.device, model, criterion, m, self.args, train_loader, model_save_path, log_path, test_loader, save_model=save_model, save_log=save_log, model_class=self.model_class)
+                    train(self.args.device, model, criterion, m, self.args, train_loader, model_save_path, result_path, test_loader, save_model=save_model, save_result=save_result, model_class=self.model_class)
                 
                 # get average results
-                average_metrics(log_path)
+                average_metrics(result_path)
 
 
         elif self.experiment == 'cross_cancer':
@@ -110,8 +124,8 @@ class Validation_Experiment():
 
                 model_save_path = os.path.join(model_root_dir, f"model_transfer_{cancer_name}.pth")
 
-                log_path = os.path.join(log_root_dir, f"train_log_transfer_{cancer_name}.csv")
-                clear_log(log_path)
+                result_path = os.path.join(result_root_dir, f"train_result_transfer_{cancer_name}.csv")
+                clear_result(result_path)
 
                 for s in range(1,6):
                     set_seed(s)
@@ -123,10 +137,12 @@ class Validation_Experiment():
                         train_loader, test_loader = load_train_data_SL(data_test, data_train, self.gene_sent_map, self.args.batch_size, bi_rpr=True, sent_mask=self.sent_mask_map, emb_mtx=self.geneformer_emb_mtx)
                         model = Transformer_Finetuner(config=self.transformer_config)
 
-                    train(self.args.device, model, criterion, m, self.args, train_loader, model_save_path, log_path, test_loader, save_model=save_model, save_log=save_log, model_class=self.model_class)
+                    train(self.args.device, model, criterion, m, self.args, train_loader, model_save_path, result_path, test_loader, save_model=save_model, save_result=save_result, model_class=self.model_class)
 
                 # get average results
-                average_metrics(log_path)
+                average_metrics(result_path)
+        
+        sys.stdout = sys.__stdout__
 
 
     def save_train_test_data(self, data_total, cancer_type):

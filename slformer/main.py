@@ -2,6 +2,7 @@ import argparse
 import torch
 import yaml
 import easydict
+import json
 
 from util import set_seed
 from preprocess import Data_Preprocess
@@ -61,14 +62,12 @@ parser.add_argument('--att_nhead', type=int, default=2,
 
 args = parser.parse_args()
 
-# device = torch.device("cuda:" + str(args.device)) if torch.cuda.is_available() else torch.device("cpu")
-args.device = torch.device("cuda:" + str(args.device)) 
-
 set_seed(1)
 
 
 with open(args.config_file, 'r') as f:
     config = easydict.EasyDict(yaml.safe_load(f))
+
 
 data_preprocess = Data_Preprocess(config)
 common_data = data_preprocess.get_common_data(n=args.n)
@@ -83,7 +82,7 @@ experiment_set = Validation_Experiment(
 
 experiment_set.run_experiment(
     save_model=False,
-    save_log=True,
+    save_result=True,
 )
 
 
