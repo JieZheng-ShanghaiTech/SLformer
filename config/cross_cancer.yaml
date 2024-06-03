@@ -1,5 +1,5 @@
 
-EXPERIMENT_DIR: ./result/experiment
+EXPERIMENT_DIR: ./experiment
 SAVED_DATA_DIR: ./data/saved_data
 
 sc_dir: /data/xinliu/GeneSentence/TISCH2/

@@ -8,6 +8,7 @@ import torch
 import time
 import sys
 import json
+import logging
 
 from util import set_seed, create_dir, ndcg, ndcg_bin, calc_random_auc, get_train_test_SL, transfer_data_idx, average_metrics, clear_result
 from train import train
@@ -79,8 +80,9 @@ class Validation_Experiment():
             create_dir(result_root_dir)
         if save_model:
             create_dir(model_root_dir)
-            
-        # sys.stdout = open(log_fp, 'w')
+        
+        file_handler = logging.FileHandler(log_fp, mode='w')
+        logging.getLogger().addHandler(file_handler)
 
         params = {}
         params.update(vars(self.args))
@@ -115,20 +117,47 @@ class Validation_Experiment():
                 average_metrics(result_path)
 
 
+        # elif self.experiment == 'cross_cancer':
+
+        #     for cancer, cancer_name in self.id2cancer_map.items():
+
+        #         data_test = np.load(os.path.join(self.config.SAVED_DATA_DIR, "SL_train_test_data", self.experiment, f"test_{cancer_name}.npy"))
+        #         data_train = np.load(os.path.join(self.config.SAVED_DATA_DIR, "SL_train_test_data", self.experiment, f"train_{cancer_name}.npy"))
+
+        #         model_save_path = os.path.join(model_root_dir, f"model_transfer_{cancer_name}.pth")
+
+        #         result_path = os.path.join(result_root_dir, f"train_result_transfer_{cancer_name}.csv")
+        #         clear_result(result_path)
+
+        #         for s in range(1,6):
+        #             set_seed(s)
+
+        #             if self.model_class == 'geneformer':
+        #                 train_loader, test_loader = load_train_data_SL(data_test, data_train, self.geneformer_emb_map, self.args.batch_size)
+        #                 model = MLP(num_layers=2, input_dim=self.args.input_dim, hidden_dim=self.args.hidden_dim, output_dim=self.args.output_dim)
+        #             elif self.model_class == 'transformer':
+        #                 train_loader, test_loader = load_train_data_SL(data_test, data_train, self.gene_sent_map, self.args.batch_size, bi_rpr=True, sent_mask=self.sent_mask_map, emb_mtx=self.geneformer_emb_mtx)
+        #                 model = Transformer_Finetuner(config=self.transformer_config)
+
+        #             train(self.args.device, model, criterion, m, self.args, train_loader, model_save_path, result_path, test_loader, save_model=save_model, save_result=save_result, model_class=self.model_class)
+
+        #         # get average results
+        #         average_metrics(result_path)
+
         elif self.experiment == 'cross_cancer':
 
-            for cancer, cancer_name in self.id2cancer_map.items():
+            for s in range(1,6):
+                set_seed(s)
 
-                data_test = np.load(os.path.join(self.config.SAVED_DATA_DIR, "SL_train_test_data", self.experiment, f"test_{cancer_name}.npy"))
-                data_train = np.load(os.path.join(self.config.SAVED_DATA_DIR, "SL_train_test_data", self.experiment, f"train_{cancer_name}.npy"))
+                model_save_path = os.path.join(model_root_dir, f"model_seed_{s}.pth")
 
-                model_save_path = os.path.join(model_root_dir, f"model_transfer_{cancer_name}.pth")
-
-                result_path = os.path.join(result_root_dir, f"train_result_transfer_{cancer_name}.csv")
+                result_path = os.path.join(result_root_dir, f"train_result_seed_{s}.csv")
                 clear_result(result_path)
 
-                for s in range(1,6):
-                    set_seed(s)
+                for cancer, cancer_name in self.id2cancer_map.items():
+
+                    data_test = np.load(os.path.join(self.config.SAVED_DATA_DIR, "SL_train_test_data", self.experiment, f"test_{cancer_name}.npy"))
+                    data_train = np.load(os.path.join(self.config.SAVED_DATA_DIR, "SL_train_test_data", self.experiment, f"train_{cancer_name}.npy"))
 
                     if self.model_class == 'geneformer':
                         train_loader, test_loader = load_train_data_SL(data_test, data_train, self.geneformer_emb_map, self.args.batch_size)
@@ -141,8 +170,6 @@ class Validation_Experiment():
 
                 # get average results
                 average_metrics(result_path)
-        
-        # sys.stdout = sys.__stdout__
 
 
     def save_train_test_data(self, data_total, cancer_type):
@@ -162,27 +189,38 @@ class Validation_Experiment():
                 np.save(os.path.join(save_dir, f"train_{cancer_name}.npy"), data_train)
 
 
-    def get_benchmark_data(self, data_total, cancer_type):
+    def get_benchmark_data(self):
 
-        experiment_dir = os.path.join(self.config.EXPERIMENT_DIR, f"{self.experiment}_{self.model_class}_n{self.args.n}")
-        create_dir(experiment_dir)
-        save_dir = os.path.join(experiment_dir, "train_test_data")
-        create_dir(os.path.join(save_dir))
+        save_dir = os.path.join(self.config.SAVED_DATA_DIR, "benchmark_data")
+        create_dir(os.path.join(save_dir, "cancer_specific"))
+        create_dir(os.path.join(save_dir, "mix"))
+        create_dir(os.path.join(save_dir, "cross_cancer"))
 
-        if self.experiment == 'cancer_specific':
+        # cancer_specific
+        for cancer_type in self.cancer_list:
             for cv in range(1,6):
-                data_test, data_train = get_train_test_SL(data_total, cv=cv, data_all=False, return_idx=False)
+                data_test = np.load(os.path.join(self.config.SAVED_DATA_DIR, "SL_train_test_data", "cancer_specific", f"test_{cancer_type}_fold_{cv}.npy"))
+                data_train = np.load(os.path.join(self.config.SAVED_DATA_DIR, "SL_train_test_data", "cancer_specific", f"train_{cancer_type}_fold_{cv}.npy"))
                 df_test = transfer_data_idx(data_test, self.gene2id_map, self.id2cancer_map)
                 df_train = transfer_data_idx(data_train, self.gene2id_map, self.id2cancer_map)
-                df_test.to_csv(os.path.join(save_dir, f"test_{cancer_type}_cv_{cv}.csv"), index=False)
-                df_train.to_csv(os.path.join(save_dir, f"train_{cancer_type}_cv_{cv}.csv"), index=False)
-        elif self.experiment == 'cross_cancer':
-            for cancer, cancer_name in self.id2cancer_map.items():
-                data_test, data_train = get_train_test_SL(data_total, data_all=False, split_by_cancer=True, test_cancer=cancer, return_idx=False)
-                df_test = transfer_data_idx(data_test, self.gene2id_map, self.id2cancer_map)
-                df_train = transfer_data_idx(data_train, self.gene2id_map, self.id2cancer_map)
-                df_test.to_csv(os.path.join(save_dir, f"test_transfer_{cancer_name}.csv"), index=False)
-                df_train.to_csv(os.path.join(save_dir, f"train_transfer_{cancer_name}.csv"), index=False)
+                df_test.to_csv(os.path.join(save_dir, "cancer_specific", f"test_{cancer_type}_fold_{cv}.csv"), index=False)
+                df_train.to_csv(os.path.join(save_dir, "cancer_specific", f"train_{cancer_type}_fold_{cv}.csv"), index=False)
+        # mix
+        for cv in range(1,6):
+            data_test = np.load(os.path.join(self.config.SAVED_DATA_DIR, "SL_train_test_data", "mix", f"test_all_fold_{cv}.npy"))
+            data_train = np.load(os.path.join(self.config.SAVED_DATA_DIR, "SL_train_test_data", "mix", f"train_all_fold_{cv}.npy"))
+            df_test = transfer_data_idx(data_test, self.gene2id_map, self.id2cancer_map)
+            df_train = transfer_data_idx(data_train, self.gene2id_map, self.id2cancer_map)
+            df_test.to_csv(os.path.join(save_dir, "mix", f"test_all_fold_{cv}.csv"), index=False)
+            df_train.to_csv(os.path.join(save_dir, "mix", f"train_all_fold_{cv}.csv"), index=False)
+        # cross_cancer
+        for cancer, cancer_name in self.id2cancer_map.items():
+            data_test = np.load(os.path.join(self.config.SAVED_DATA_DIR, "SL_train_test_data", "cross_cancer", f"test_{cancer_name}.npy"))
+            data_train = np.load(os.path.join(self.config.SAVED_DATA_DIR, "SL_train_test_data", "cross_cancer", f"train_{cancer_name}.npy"))
+            df_test = transfer_data_idx(data_test, self.gene2id_map, self.id2cancer_map)
+            df_train = transfer_data_idx(data_train, self.gene2id_map, self.id2cancer_map)
+            df_test.to_csv(os.path.join(save_dir, "cross_cancer", f"test_{cancer_name}.csv"), index=False)
+            df_train.to_csv(os.path.join(save_dir, "cross_cancer", f"train_{cancer_name}.csv"), index=False)
 
 
     # def get_random_auc(self, data_total):

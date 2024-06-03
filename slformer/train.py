@@ -1,6 +1,7 @@
 import torch
 import time
 import os
+import logging
 from sklearn import metrics
 import numpy as np
 import pickle as pkl
@@ -42,7 +43,7 @@ def train(device, model, criterion, m, args, train_loader, model_save_path, resu
 
     for epoch in range(1, args.epochs + 1):
 
-        print('Epoch {}'.format(epoch))
+        logging.info(f'Epoch {epoch}')
 
         loss_train_record = {
             "train_loss":0,
@@ -176,9 +177,9 @@ def train(device, model, criterion, m, args, train_loader, model_save_path, resu
                 not_improved_count += 1
             
             if not_improved_count > args.early_stop:
-                print("Stop training, Best performance: AUPR=", best_metric, "Best epoch=", best_epoch)
+                logging.info("Stop training, Best performance: AUPR= "+str(best_metric)+"Best epoch= "+str(best_epoch))
                 best_train_record, best_test_record = best_metric_record
-                print(training_info(best_train_record, len(train_loader))+training_info(best_test_record, len(test_loader)))
+                logging.info(training_info(best_train_record, len(train_loader))+training_info(best_test_record, len(test_loader)))
 
                 # save best training performance
                 if save_result:
@@ -191,20 +192,20 @@ def train(device, model, criterion, m, args, train_loader, model_save_path, resu
                             )
 
                 if save_model:
-                    print("Best model saved in", model_save_path)
+                    logging.info("Best model saved in "+model_save_path)
 
                 break
             
 
         # average loss and print
         if test_loader is not None:
-            print(training_info(loss_train_record, len(train_loader))+training_info(loss_test_record, len(test_loader)))
+            logging.info(training_info(loss_train_record, len(train_loader))+training_info(loss_test_record, len(test_loader)))
         else:
-            print(training_info(loss_train_record, len(train_loader)))
+            logging.info(training_info(loss_train_record, len(train_loader)))
 
         epoch_end_time = time.time()
 
-        print("elapsed_time\t" + str(epoch_end_time-epoch_start_time))
+        logging.info("elapsed_time\t" + str(epoch_end_time-epoch_start_time))
 
         epoch_start_time = epoch_end_time
     
@@ -212,6 +213,6 @@ def train(device, model, criterion, m, args, train_loader, model_save_path, resu
     if test_loader is None:
         if save_model:
             torch.save(model, model_save_path)
-            print("Completed Training, model saved in", model_save_path)
+            logging.info("Completed Training, model saved in "+model_save_path)
 
 
