@@ -16,7 +16,7 @@ parser.add_argument('--config_file', type=str, default="./config/cross_cancer.ya
 parser.add_argument('--n', type=int, default=10,
                     help='genesentence length n')
 
-parser.add_argument('--device', type=int, default=0,
+parser.add_argument('--device', type=int, default=2,
                     help='which gpu to use if any (default: 0)')
 parser.add_argument('--batch_size', type=int, default=512,
                     help='input batch size for training (default: 256)')
@@ -81,7 +81,7 @@ experiment_set = Validation_Experiment(
 )
 
 experiment_set.run_experiment(
-    save_model=False,
+    save_model=True,
     save_result=True,
 )
 

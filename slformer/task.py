@@ -146,30 +146,27 @@ class Validation_Experiment():
 
         elif self.experiment == 'cross_cancer':
 
-            for s in range(1,6):
-                set_seed(s)
+            result_path = os.path.join(result_root_dir, f"train_result_cross_cancer.csv")
+            clear_result(result_path)
 
-                model_save_path = os.path.join(model_root_dir, f"model_seed_{s}.pth")
+            for cancer, cancer_name in self.id2cancer_map.items():
 
-                result_path = os.path.join(result_root_dir, f"train_result_seed_{s}.csv")
-                clear_result(result_path)
+                model_save_path = os.path.join(model_root_dir, f"model_transfer2{cancer_name}.pth")
 
-                for cancer, cancer_name in self.id2cancer_map.items():
+                data_test = np.load(os.path.join(self.config.SAVED_DATA_DIR, "SL_train_test_data", self.experiment, f"test_{cancer_name}.npy"))
+                data_train = np.load(os.path.join(self.config.SAVED_DATA_DIR, "SL_train_test_data", self.experiment, f"train_{cancer_name}.npy"))
 
-                    data_test = np.load(os.path.join(self.config.SAVED_DATA_DIR, "SL_train_test_data", self.experiment, f"test_{cancer_name}.npy"))
-                    data_train = np.load(os.path.join(self.config.SAVED_DATA_DIR, "SL_train_test_data", self.experiment, f"train_{cancer_name}.npy"))
+                if self.model_class == 'geneformer':
+                    train_loader, test_loader = load_train_data_SL(data_test, data_train, self.geneformer_emb_map, self.args.batch_size)
+                    model = MLP(num_layers=2, input_dim=self.args.input_dim, hidden_dim=self.args.hidden_dim, output_dim=self.args.output_dim)
+                elif self.model_class == 'transformer':
+                    train_loader, test_loader = load_train_data_SL(data_test, data_train, self.gene_sent_map, self.args.batch_size, bi_rpr=True, sent_mask=self.sent_mask_map, emb_mtx=self.geneformer_emb_mtx)
+                    model = Transformer_Finetuner(config=self.transformer_config)
 
-                    if self.model_class == 'geneformer':
-                        train_loader, test_loader = load_train_data_SL(data_test, data_train, self.geneformer_emb_map, self.args.batch_size)
-                        model = MLP(num_layers=2, input_dim=self.args.input_dim, hidden_dim=self.args.hidden_dim, output_dim=self.args.output_dim)
-                    elif self.model_class == 'transformer':
-                        train_loader, test_loader = load_train_data_SL(data_test, data_train, self.gene_sent_map, self.args.batch_size, bi_rpr=True, sent_mask=self.sent_mask_map, emb_mtx=self.geneformer_emb_mtx)
-                        model = Transformer_Finetuner(config=self.transformer_config)
+                train(self.args.device, model, criterion, m, self.args, train_loader, model_save_path, result_path, test_loader, save_model=save_model, save_result=save_result, model_class=self.model_class)
 
-                    train(self.args.device, model, criterion, m, self.args, train_loader, model_save_path, result_path, test_loader, save_model=save_model, save_result=save_result, model_class=self.model_class)
-
-                # get average results
-                average_metrics(result_path)
+            # get average results
+            average_metrics(result_path)
 
 
     def save_train_test_data(self, data_total, cancer_type):
