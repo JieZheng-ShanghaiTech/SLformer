@@ -11,12 +11,12 @@ from task import Validation_Experiment
 
 parser = argparse.ArgumentParser(description='SL prediction')
 
-parser.add_argument('--config_file', type=str, default="./config/cross_cancer.yaml",
+parser.add_argument('--config_file', type=str, default="./config/cancer_specific.yaml",
                     help='config file path')
-parser.add_argument('--n', type=int, default=10,
+parser.add_argument('--n', type=int, default=50,
                     help='genesentence length n')
 
-parser.add_argument('--device', type=int, default=2,
+parser.add_argument('--device', type=int, default=0,
                     help='which gpu to use if any (default: 0)')
 parser.add_argument('--batch_size', type=int, default=512,
                     help='input batch size for training (default: 256)')
@@ -51,7 +51,7 @@ parser.add_argument('--dim_feedforward', type=int, default=256*2,
                     help='')
 parser.add_argument('--num_layers', type=int, default=1,
                     help='')
-parser.add_argument('--add_att', type=bool, default=False,
+parser.add_argument('--add_att', type=bool, default=True,
                     help='')
 parser.add_argument('--att_nhead', type=int, default=2,
                     help='')
@@ -81,7 +81,7 @@ experiment_set = Validation_Experiment(
 )
 
 experiment_set.run_experiment(
-    save_model=True,
+    save_model=False,
     save_result=True,
 )
 
