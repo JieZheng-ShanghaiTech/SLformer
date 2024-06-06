@@ -9,7 +9,7 @@ from task import Validation_Experiment
 
 parser = argparse.ArgumentParser(description='prepare SL data')
 
-parser.add_argument('--config_file', type=str, default="./config/cross_cancer.yaml",
+parser.add_argument('--config_file', type=str, default="./config/cancer_specific.yaml",
                     help='config file path')
 parser.add_argument('--n', type=int, default=10,
                     help='genesentence length n')

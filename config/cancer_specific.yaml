@@ -1,5 +1,5 @@
 
-EXPERIMENT_DIR: ./result/experiment
+EXPERIMENT_DIR: ./experiment
 SAVED_DATA_DIR: ./data/saved_data
 
 sc_dir: /data/xinliu/GeneSentence/TISCH2/
@@ -9,12 +9,12 @@ geneformer_emb_dir: ./data/TISCH2/geneformer_emb
 SL_data_dir: ./data/SL_data
 
 # model_type = "geneformer" or "transformer"
-model_type: geneformer
+model_type: transformer
 
 # task = cancer_specific, mix, or cross_cancer
 task: 
   type: cancer_specific
-  cancer: [KIRC, COAD, LAML, OV, BRCA, CESC, SKCM]
+  cancer: [KIRC, COAD, LAML, OV, BRCA, CESC, SKCM, LUAD]
 
 
 sc_samples:

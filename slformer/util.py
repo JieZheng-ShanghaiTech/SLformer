@@ -17,6 +17,7 @@ def set_seed(seed):
     random.seed(seed)
     torch.manual_seed(seed)
     torch.cuda.manual_seed(seed)
+    torch.backends.cudnn.deterministic = True
 
 
 def create_csv(path, csv_head):

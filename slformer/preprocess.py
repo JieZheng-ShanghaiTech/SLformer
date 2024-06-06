@@ -593,7 +593,7 @@ if __name__ == "__main__":
     # data_preprocess.data_prepare_coexp()
 
     # # preprocess and prepare gene sentence data
-    # data_preprocess.data_prepare_genesent(n=10)
+    data_preprocess.data_prepare_genesent(n=20)
 
 
     # ===== add an additional cancer type =====

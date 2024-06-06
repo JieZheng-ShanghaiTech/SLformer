@@ -1,8 +1,7 @@
 import argparse
-import torch
 import yaml
 import easydict
-import json
+import logging
 
 from util import set_seed
 from preprocess import Data_Preprocess
@@ -12,9 +11,9 @@ from task import Validation_Experiment
 
 parser = argparse.ArgumentParser(description='SL prediction')
 
-parser.add_argument('--config_file', type=str, default="./config/cross_cancer.yaml",
+parser.add_argument('--config_file', type=str, default="./config/cancer_specific.yaml",
                     help='config file path')
-parser.add_argument('--n', type=int, default=10,
+parser.add_argument('--n', type=int, default=50,
                     help='genesentence length n')
 
 parser.add_argument('--device', type=int, default=0,
@@ -61,6 +60,7 @@ parser.add_argument('--att_nhead', type=int, default=2,
 
 
 args = parser.parse_args()
+logging.basicConfig(level=logging.INFO)
 
 set_seed(1)
 
@@ -86,10 +86,7 @@ experiment_set.run_experiment(
 )
 
 
-# experiment_set.get_benchmark_data(
-#     data_total=data_total,
-#     cancer_type=CANCER
-# )
+# experiment_set.get_benchmark_data()
 
 # experiment_set.infer_primpartner(
 #     data_fname="IDH1_reactome_Glioma",
