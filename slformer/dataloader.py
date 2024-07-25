@@ -5,64 +5,82 @@ import pickle as pkl
 from scipy import stats
 from torch.utils.data import Dataset, DataLoader
 
-from dataset import SL_Dataset
+from dataset import SL_Dataset, GeneSentenceDataset
 from util import split_data, split_data_by_cancer, get_weighted_sampler
 
 
-def prepare_SL_general_data(config, cancer, common_data):
+def prepare_SL_data(config, cancer, common_data, type="general"):
 
-    # fname = os.path.join(SL_data_save_path, f"SL_general_{cancer}_TISCH2.npy")
-    # if os.path.exists(fname):
-    #     data_total = np.load(fname)
-    #     return data_total
-
-    # else:
     SL_loader = SL_Loader(
         config=config,
         gene2id_map=common_data["gene2id_map"],
         gene_emb_map=common_data["gene2sent_map"],
         geneformer_emb_map=common_data["geneformer_emb_map"],
-        cancer2id_map=common_data["cancer2id_map"]
+        cancer2id_map=common_data["cancer2id_map"],
+        type=type
     )
 
-    # cancer_list = ["all"]+ common_data["cancer_list"]
-
-    data_total = SL_loader.get_SL_data(data_type="general", cancer_filt=cancer) # return a numpy array
-    print(f"Processed {cancer} data, size={len(data_total)}")
-    # np.save(os.path.join(SL_data_save_path, f"SL_general_{cancer}_TISCH2.npy"), data_total)
+    if type == "general":
+        data_total = SL_loader.get_SL_data(data_type="general", cancer_filt=cancer) # return a numpy array
+        if len(data_total) > 0: # belonging to ELISL cancer types
+            print(f"Processed {cancer} data, size={len(data_total)}")
+    elif type == "downstream":
+        data_total = {}
+        for data_type in list(SL_loader.SL_datasets.keys()):
+            if data_type != "general":
+                data = SL_loader.get_SL_data(data_type=data_type, cancer_filt="all", downstream_stat=True)
+                data_total[data_type] = data
 
     return data_total
 
 
+def load_all_data_SL(all_data, gene_rpr_map, batch_size, n=None, bi_rpr=False, sent_mask=None, emb_mtx=None, augmentation=None):
 
-def load_train_data_SL(test_data, train_data, gene_rpr_map, batch_size, bi_rpr=False, sent_mask=None, emb_mtx=None):
+    loader = DataLoader(SL_Dataset(all_data, gene_rpr_map, n=n, bi_rpr=bi_rpr, sent_mask=sent_mask, emb_mtx=emb_mtx, augmentation=augmentation), batch_size=batch_size, shuffle=False)
+    
+    return loader
 
-    # if data_all:
 
-    #     loader = DataLoader(SL_Dataset(data_total, gene_rpr_map, bi_rpr=bi_rpr, sent_mask=sent_mask), batch_size=batch_size, shuffle=False)
-    #     return loader
+def load_train_data_SL(test_data, train_data, gene_rpr_map, batch_size, n=None, bi_rpr=False, sent_mask=None, emb_mtx=None, augmentation=None):
 
-    # if split_by_cancer==True and test_cancer is not None:
-    #     test_data, train_data = split_data_by_cancer(data_total, test_cancer=test_cancer)
-    #     # print("train shape", train_data.shape)
-    # else:
-    #     test_data, train_data = split_data(data_total, cv=cv, seed=1)
-    # cv from 1 to 5
-    sampler_test = get_weighted_sampler(test_data)
-    sampler_train = get_weighted_sampler(train_data)
+    # sampler_test = get_weighted_sampler(test_data)
+    # sampler_train = get_weighted_sampler(train_data)
 
-    train_dataset = SL_Dataset(train_data, gene_rpr_map, bi_rpr=bi_rpr, sent_mask=sent_mask, emb_mtx=emb_mtx)
-    test_dataset = SL_Dataset(test_data, gene_rpr_map, bi_rpr=bi_rpr, sent_mask=sent_mask, emb_mtx=emb_mtx)
+    train_dataset = SL_Dataset(train_data, gene_rpr_map, n=n, bi_rpr=bi_rpr, sent_mask=sent_mask, emb_mtx=emb_mtx, augmentation=augmentation)
+    test_dataset = SL_Dataset(test_data, gene_rpr_map, n=n, bi_rpr=bi_rpr, sent_mask=sent_mask, emb_mtx=emb_mtx, augmentation=None)
 
     drop_last = {"train":False, "test":False}
     for type, dataset in {"train":train_dataset, "test":test_dataset}.items():
         if len(dataset)%batch_size < 20:   # avoid the case that the last batch is too small
             drop_last[type] = True
 
-    train_loader = DataLoader(train_dataset, batch_size=batch_size, sampler=sampler_train, drop_last=drop_last["train"])
-    test_loader = DataLoader(test_dataset, batch_size=batch_size, sampler=sampler_test, drop_last=drop_last["test"])
+    # train_loader = DataLoader(train_dataset, batch_size=batch_size, sampler=sampler_train, drop_last=drop_last["train"])
+    # test_loader = DataLoader(test_dataset, batch_size=batch_size, sampler=sampler_test, drop_last=drop_last["test"])
+
+    train_loader = DataLoader(train_dataset, batch_size=batch_size, shuffle=True, drop_last=drop_last["train"])
+    test_loader = DataLoader(test_dataset, batch_size=batch_size, shuffle=False, drop_last=drop_last["test"])
 
     return train_loader, test_loader
+
+
+def load_pretrain_data(train_data, test_data, batch_size, emb_mtx, n, gene2anno_map, random_init):
+
+    train_dataset = GeneSentenceDataset(train_data, emb_mtx=emb_mtx, n=n, gene2anno_map=gene2anno_map, random_init=random_init)
+    test_dataset = GeneSentenceDataset(test_data, emb_mtx=emb_mtx, n=n, gene2anno_map=gene2anno_map, random_init=random_init)
+
+    train_loader = DataLoader(train_dataset, batch_size=batch_size, shuffle=True)
+    test_loader = DataLoader(test_dataset, batch_size=batch_size, shuffle=False)
+
+    return train_loader, test_loader
+
+
+def load_pretrain_data_all(all_data, batch_size, emb_mtx, n, gene2anno_map, random_init):
+
+    all_dataset = GeneSentenceDataset(all_data, emb_mtx=emb_mtx, n=n, gene2anno_map=gene2anno_map, random_init=random_init)
+
+    all_loader = DataLoader(all_dataset, batch_size=batch_size, shuffle=True)
+
+    return all_loader
 
 
 
@@ -85,10 +103,12 @@ class SL_Loader():
         self.SL_general_df = pd.read_excel(self.SL_datasets.general.path)
         
         if type == "downstream":
+            SL_general_data = self.get_SL_data(data_type="general",cancer_filt="all")
+            self.SL_unique_gene = np.unique(SL_general_data[:,:2].flatten()).tolist()
             self.SL_general_map = self.construct_SL_general_map(self.SL_general_df)
-            SL_unique_gene = list(set(self.SL_general_df["gene1"]).union(set(self.SL_general_df["gene2"])))
-            SL_unique_gene = list(set(SL_unique_gene).intersection(set(self.gene_list)))
-            self.SL_unique_gene = [self.gene2id_map[g] for g in SL_unique_gene]
+            # SL_unique_gene = list(set(self.SL_general_df["gene1"]).union(set(self.SL_general_df["gene2"])))
+            # SL_unique_gene = list(set(SL_unique_gene).intersection(set(self.gene_list)))
+            # self.SL_unique_gene = [self.gene2id_map[g] for g in SL_unique_gene]
 
 
     def get_SL_data(self, data_type, cancer_filt='all', downstream_stat=False):
@@ -101,15 +121,15 @@ class SL_Loader():
                 SL_data = pd.read_csv(self.SL_datasets[data_type].path)
                 SL_filt_general = self.filt_SL_general(self.SL_general_map, SL_data)
 
-                # print("after general filtration", len(SL_filt_general))
-
                 SL_filt = self.construct_data(SL_filt_general, cancer_filt='all')
+
+                print("Processing", data_type, "size=", len(SL_filt))
 
                 if downstream_stat:
                     downstream_gene = list(set(SL_filt[:,0]).union(set(SL_filt[:,1])))
                     downstream_overlap = list(set(downstream_gene).intersection(set(self.SL_unique_gene)))
                     print(f"Overlapped genes with ELISL SL data: {len(downstream_overlap)}/{len(downstream_gene)}")
-                
+
                 return SL_filt
 
             else:

@@ -1,0 +1,69 @@
+
+program: ./slformer/main.py
+# method: random
+method: grid
+name: slformer_sweep
+metric:
+  goal: maximize
+  name: avg_test_aupr
+parameters:
+  n:
+    values:
+      # [10, 20, 30, 50]
+      [10, 20, 30]
+  batch_size:
+    values:
+      [512]
+  lr:
+    values:
+      # [1.0e-3, 5.0e-4, 1.0e-4, 5.0e-5, 1.0e-5]
+      [1.0e-4, 5.0e-5, 2.5e-5]
+  # betas:
+  #   values:
+  #     [!!python/tuple [0.9, 0.99]]
+  eps:
+    values:
+      [1.0e-5]
+  weight_decay:
+    values:
+      [1.0e-5]
+  hidden_dim:
+    values:
+      [128]
+  d_model:
+    values:
+      [256]
+  n_head:
+    values:
+      [1]
+  dropout:
+    values:
+      [0.1]
+  dim_feedforward:
+    values:
+      # [512, 256, 128]
+      [256, 128]
+  num_layers:
+    values:
+      [1, 2]
+  add_att:
+    values:
+      [1]
+  att_nhead:
+    values:
+      [1]
+  
+
+command:
+  - python
+  - ./slformer/main.py
+  - "--config"
+  - "./config/cancer_specific.yaml"
+  - "--device"
+  - 1
+  - "--wandb_track"
+  - 1
+  - "--save_model"
+  - 0
+  - "--save_result"
+  - 1

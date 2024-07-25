@@ -5,6 +5,7 @@ from torch.nn.utils.weight_norm import weight_norm
 import math
 from torch_scatter import scatter_mean
 
+
 class Transformer_Finetuner(nn.Module):
 
     def __init__(self, config):
@@ -25,7 +26,7 @@ class Transformer_Finetuner(nn.Module):
         encoder_layer = nn.TransformerEncoderLayer(
             d_model=config['d_model'],
             nhead=config['n_head'],
-            dim_feedforward=config['dim_feedforward'],
+            dim_feedforward=config['transformer_hidden_dim'],
             dropout=config['dropout'],
         )
         self.transformer_encoder = nn.TransformerEncoder(
@@ -37,9 +38,9 @@ class Transformer_Finetuner(nn.Module):
 
         if self.config['add_att']:
             # self.cross_att_layer = CrossAttentionBlock(hidden_dim=config['d_model'], num_heads=config['att_nhead'], pooling=False)
-            self.fusion_model = CrossAttention(config['d_model'], num_layers=1, num_heads=config['att_nhead'], batch_norm=False, activation="relu")
+            self.fusion_model = CrossAttention(config['d_model'], num_layers=config['num_layers'], num_heads=config['att_nhead'], batch_norm=False, activation="relu")
         
-        self.predictor = MLP(num_layers=2, input_dim=self.mlp_input_dim, hidden_dim=config['mlp_hidden_dim'], output_dim=1)
+        self.predictor = MLP(num_layers=2, input_dim=self.mlp_input_dim, hidden_dim=config['mlp_hidden_dim'], output_dim=config['mlp_output_dim'])
         # self.predictor = ResNetClassifier(config['d_model']*2)
 
 
@@ -73,6 +74,62 @@ class Transformer_Finetuner(nn.Module):
         out = self.predictor(h_total)
 
         return out
+    
+
+class Transformer_Pretrain(nn.Module):
+
+    def __init__(self, config):
+        super(Transformer_Pretrain, self).__init__()
+
+        assert config['d_model'] % config['n_head'] == 0, "nheads must divide evenly into d_model"
+        self.config = config
+        self.d_model = config['d_model']
+        self.random_init = config['random_init']
+        
+        # if self.random_init:
+        #     self.emb = nn.Embedding(config['vocab_size']*9, config['d_model'], padding_idx=0)
+
+        self.pos_encoder = PositionalEncoding(
+            d_model=config['d_model'],
+            dropout=config['dropout'],
+            vocab_size=config['vocab_size'],
+        )
+
+        encoder_layer = nn.TransformerEncoderLayer(
+            d_model=config['d_model'],
+            nhead=config['n_head'],
+            dim_feedforward=config['transformer_hidden_dim'],
+            dropout=config['dropout'],
+        )
+        self.transformer_encoder = nn.TransformerEncoder(
+            encoder_layer,
+            num_layers=config['num_layers'],
+        )
+
+        self.mlp_input_dim = config['d_model']
+        
+        self.predictor = MLP(num_layers=2, input_dim=self.mlp_input_dim, hidden_dim=config['mlp_hidden_dim'], output_dim=config['mlp_output_dim'])
+
+
+    def forward(self, x, mask):
+
+        mask = (1-mask).bool()
+        x = x.transpose(0,1)
+
+        if not self.random_init:
+            x = x * math.sqrt(self.d_model)
+        else:
+            x = self.emb(x) * math.sqrt(self.d_model)
+            
+        x = self.pos_encoder(x)
+        h = self.transformer_encoder(x, src_key_padding_mask=mask)
+        h = h.mean(dim=0)
+        # h = h[0,:,:]    # [512, 256]   
+        
+        out = self.predictor(h)
+
+        return out
+
 
 
 class PositionalEncoding(nn.Module):
@@ -148,8 +205,8 @@ class CrossAttentionBlock(nn.Module):
 
     def forward(self, input1, input2, mask1, mask2):
 
-        input1 = input1.transpose(0, 1)
-        input2 = input2.transpose(0, 1)
+        # input1 = input1.transpose(0, 1)
+        # input2 = input2.transpose(0, 1)
         query1 = self._heads(self.query1(input1), self.num_heads, self.head_size)
         key1 = self._heads(self.key1(input1), self.num_heads, self.head_size)
         query2 = self._heads(self.query2(input2), self.num_heads, self.head_size)
@@ -224,6 +281,11 @@ class CrossAttention(nn.Module):
         # protein_input, protein_mask = variadic_to_padded(protein_input, graph.num_residues, value=0)
 
         for i, layer in enumerate(self.layers):
+
+            if i == 0:
+                protein_input = protein_input.transpose(0, 1)
+                text_input = text_input.transpose(0, 1)
+
             protein_input, text_input = layer(protein_input, text_input, mask1.bool(), mask2.bool())
             if self.batch_norm:
                 protein_input = self.protein_batch_norm_layers[i](protein_input.transpose(1, 2)).transpose(1, 2)

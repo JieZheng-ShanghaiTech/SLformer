@@ -1,0 +1,66 @@
+
+EXPERIMENT_DIR: ./experiment
+SAVED_DATA_DIR: ./data/saved_data
+sc_dir: /data/xinliu/GeneSentence/TISCH2/
+
+SL_data_dir: ./data/SL_data
+
+task: 
+  type: inference
+  name: IDH1_DDR_Glioma_test
+  # name: IDH1_DDR_LAML_test
+  data:
+    kegg: ./data/saved_data/inference/IDH1_DDR_Glioma_kegg.npy
+    reactome: ./data/saved_data/inference/IDH1_DDR_Glioma_reactome.npy
+    # kegg: ./data/saved_data/inference/IDH1_DDR_LAML_kegg.npy
+    # reactome: ./data/saved_data/inference/IDH1_DDR_LAML_reactome.npy
+  model:
+    # noatt
+    # cross_cancer_test: 
+    #   model_type: transformer
+    #   path: ./experiment/cross_cancer/transformer/2024-07-04-14:59:01
+    # cross_cancer_no1: 
+    #   model_type: transformer
+    #   path: ./experiment/cross_cancer/transformer/2024-07-04-00:10:09
+    # cross_cancer_no2: 
+    #   model_type: transformer
+    #   path: ./experiment/cross_cancer/transformer/2024-07-03-23:59:39
+    # cross_cancer_no3: 
+    #   model_type: transformer
+    #   path: ./experiment/cross_cancer/transformer/2024-07-04-01:47:13
+    # cross_cancer_no4: 
+    #   model_type: transformer
+    #   path: ./experiment/cross_cancer/transformer/2024-07-04-01:20:19
+    # cross_cancer_no5: 
+    #   model_type: transformer
+    #   path: ./experiment/cross_cancer/transformer/2024-07-04-00:25:07
+    # cross_cancer_no6: 
+    #   model_type: transformer
+    #   path: ./experiment/cross_cancer/transformer/2024-07-04-01:03:06
+    # cross_cancer_no7: 
+    #   model_type: transformer
+    #   path: ./experiment/cross_cancer/transformer/2024-07-04-02:42:31
+    # cross_cancer_aug_no1: 
+    #   model_type: transformer
+    #   path: ./experiment/cross_cancer/transformer/2024-07-05-01:40:06
+    # cross_cancer_aug_no2: 
+    #   model_type: transformer
+    #   path: ./experiment/cross_cancer/transformer/2024-07-05-02:14:53
+    # cross_cancer_aug_no3: 
+    #   model_type: transformer
+    #   path: ./experiment/cross_cancer/transformer/2024-07-05-12:11:14
+    cross_cancer_aug_no4: 
+      model_type: transformer
+      path: ./experiment/cross_cancer/transformer/2024-07-05-04:03:54
+    cross_cancer_aug_no5: 
+      model_type: transformer
+      path: ./experiment/cross_cancer/transformer/2024-07-05-03:24:10
+    cross_cancer_aug_no6: 
+      model_type: transformer
+      path: ./experiment/cross_cancer/transformer/2024-07-05-06:25:52
+    
+
+SL_dataset:
+  general:
+    path: ./data/SL_data/raw/SLlabel_general.xlsx
+

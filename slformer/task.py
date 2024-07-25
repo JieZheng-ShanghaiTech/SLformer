@@ -1,19 +1,18 @@
 import numpy as np
-from sklearn import metrics
-from scipy import stats
+from sklearn.metrics import ndcg_score
 import pandas as pd
-import pickle as pkl
 import os
 import torch
 import time
-import sys
 import json
 import logging
+import wandb
+from datasets import load_from_disk
 
-from util import set_seed, create_dir, ndcg, ndcg_bin, calc_random_auc, get_train_test_SL, transfer_data_idx, average_metrics, clear_result
-from train import train
-from model import MLP, Transformer_Finetuner
-from dataloader import load_train_data_SL
+from util import create_dir, ndcg, ndcg_bin, mean_metrics, average_metrics, clear_result, precision_at_k, recall_at_k, hit_at_k, hit_at_k_bin
+from train import train, pretrain
+from model import MLP, Transformer_Finetuner, Transformer_Pretrain
+from dataloader import load_train_data_SL, load_all_data_SL, load_pretrain_data, load_pretrain_data_all
 
 
 
@@ -24,7 +23,7 @@ class Validation_Experiment():
 
         self.config = config
         self.args = args
-        self.model_class= config.model_type
+        self.common_data = common_data
         self.experiment = config.task.type
 
         self.geneformer_emb_map = common_data["geneformer_emb_map"]
@@ -35,46 +34,153 @@ class Validation_Experiment():
 
         self.gene2id_map = common_data["gene2id_map"]
         self.cancer_list = common_data["cancer_list"]
-        self.id2cancer_map = common_data["id2cancer_map"]
-        # self.cancer2id_map = common_data["cancer2id_map"]
+        self.cancer2id_map = common_data["cancer2id_map"]
+        self.id2cancer_map = {i:c for i,c in enumerate(self.cancer_list)}
 
     
-    def config_transformer(self):
+    def config_transformer(self, args):
 
         # GeneSentence input config =========================
         # pretrained_emb= torch.tensor(self.geneformer_emb_mtx)
         # self.pretrained_emb = pretrained_emb.to(torch.float32)
 
         # args
-        self.transformer_config = {
-            "d_model": self.args.d_model,
-            "n_head": self.args.n_head,
-            "dropout": self.args.dropout,
+        transformer_config = {
+            "d_model": args.d_model,
+            "n_head": args.n_head,
+            "dropout": args.dropout,
             "vocab_size": len(self.gene2id_map),
-            "dim_feedforward": self.args.dim_feedforward,
-            "num_layers": self.args.num_layers,
-            "mlp_hidden_dim": self.args.hidden_dim,
-            "add_att": self.args.add_att,
-            "att_nhead":self.args.att_nhead,
-            "freeze_transformer_encoder": False,
+            "transformer_hidden_dim": args.transformer_hidden_dim,
+            "num_layers": args.num_layers,
+            "mlp_hidden_dim": args.mlp_hidden_dim,
+            "mlp_output_dim": args.mlp_output_dim,
+            "add_att": args.add_att,
+            "att_nhead": args.att_nhead,
+            "random_init": args.random_init,
+            
+            # "freeze_transformer_encoder": False,
         }
 
+        return transformer_config
 
-    def run_experiment(self, save_model=False, save_result=True):
 
-        if self.model_class == 'transformer':
-            self.config_transformer()
+    def load_pretrain_checkpoint(self, args, config, cv):
 
-        criterion = torch.nn.BCELoss()
-        m = torch.nn.Sigmoid()
+        transformer_args = ['n', 'd_model', 'n_head', 'dropout', 'transformer_hidden_dim', 'num_layers',' random_init']
 
-        # save path of experiment results, models, logs, and params    
-        experiment_dir = os.path.join(self.config.EXPERIMENT_DIR, f"{self.experiment}", f"{self.model_class}", time.strftime('%Y-%m-%d-%H:%M:%S', time.localtime()))
+        if 'mix_checkpoint' in config.task:
+            model_dir = config.task.mix_checkpoint.path
+            model_savename = f'model_all_cv{cv}.pth'
+            with open(os.path.join(model_dir, 'params.json'), 'r') as f:
+                model_params = json.load(f)
+            for arg in vars(args):
+                if arg in model_params and arg in transformer_args:
+                    setattr(args, arg, model_params[arg])
+            mix_checkpoint=os.path.join(model_dir, "model", model_savename)
+            params_pretrain = torch.load(mix_checkpoint)
+
+            return args, params_pretrain
+
+        elif 'pretrain_checkpoint' in config.task:
+            model_dir = config.task.pretrain_checkpoint.path
+            with open(os.path.join(model_dir, 'params.json'), 'r') as f:
+                model_params = json.load(f)
+            for arg in vars(args):
+                if arg in model_params and arg in transformer_args:
+                    setattr(args, arg, model_params[arg])
+            transformer_config = self.config_transformer(args)
+            model = Transformer_Finetuner(config=transformer_config)
+            pretrain_checkpoint = os.path.join(model_dir, "model", "model.pth")
+            params_pretrain = torch.load(pretrain_checkpoint)
+            new_state_dict = model.state_dict()
+            filt_state_dict = {k: v for k, v in params_pretrain.items() if 'predictor' not in k}
+            new_state_dict.update(filt_state_dict)
+
+            return args, new_state_dict
+
+    
+    def gsent_pretrain(self, save_model=True, save_result=True):
+
+        criterion = torch.nn.CrossEntropyLoss()
+
+        random_init = self.args.random_init
+
+        # self.args.output_dim = len(self.gene2id_map)
+        # self.args.output_dim = 9    #num of cancer types
+        gene2anno_map = self.common_data["gene2go_map"]
+        self.args.output_dim = len(set(gene2anno_map.values()))+1
+        transformer_config = self.config_transformer(self.args)
+
+        # save path of experiment results, models, logs, and params   
+        curr_time = time.strftime('%Y-%m-%d-%H:%M:%S', time.localtime()) 
+        experiment_dir = os.path.join(self.config.EXPERIMENT_DIR, "pretrain", curr_time)
         result_root_dir = os.path.join(experiment_dir, "result")
         model_root_dir = os.path.join(experiment_dir, "model")
         log_fp = os.path.join(experiment_dir, "log.txt")
         params_fp = os.path.join(experiment_dir, "params.json")
+        
+        create_dir(experiment_dir)
+        if save_result:
+            create_dir(result_root_dir)
+        if save_model:
+            create_dir(model_root_dir)
+        
+        file_handler = logging.FileHandler(log_fp, mode='w')
+        logging.getLogger().addHandler(file_handler)
 
+        params = {}
+        params.update(vars(self.args))
+        params.update(self.config)
+        with open(params_fp, "w") as f:
+            json.dump(params, f, indent=4)
+        
+        ## Start pretraining
+        result_path = os.path.join(result_root_dir, f"train_result.csv")
+
+        gsent_data = load_from_disk("/data/xinliu/GeneSentence/TISCH2/gene_sentence/gene_sentence_n200_sc")
+        filt_data = gsent_data.filter(lambda s: s['length'] >= 2)
+        # dataset_split = filt_data.train_test_split(test_size=0.2, seed=1)
+        # data_train = dataset_split["train"]
+        # data_test = dataset_split["test"]
+
+        # print("Start pretraining...", f"train data size={len(data_train)}, test data size={len(data_test)}")
+        print("Start pretraining...", f"data size={len(filt_data)}")
+
+        model_save_path = os.path.join(model_root_dir, f"model.pth")
+        # train_loader, test_loader = load_pretrain_data(data_train, data_test, batch_size=self.args.batch_size, emb_mtx=self.geneformer_emb_mtx, n=self.args.n, gene2anno_map=gene2anno_map, random_init=random_init)
+        data_loader= load_pretrain_data_all(filt_data, batch_size=self.args.batch_size, emb_mtx=self.geneformer_emb_mtx, n=self.args.n, gene2anno_map=gene2anno_map, random_init=random_init)
+        model = Transformer_Pretrain(config=transformer_config)
+
+        # pretrain(self.args.device, model, criterion, self.args, train_loader, test_loader, model_save_path, result_path, save_model=save_model, save_result=save_result)
+        pretrain(self.args.device, model, criterion, self.args, data_loader, model_save_path, result_path, save_model=save_model, save_result=save_result)
+
+
+    def run_experiment(self, save_model=False, save_result=True, wandb_track=False):
+        
+        if wandb_track:
+            wandb.init()
+            for arg in vars(self.args):
+                if hasattr(wandb.config, arg):
+                    setattr(self.args, arg, getattr(wandb.config, arg))
+        
+        model_class= self.config.model_type
+        if model_class == 'transformer':
+            transformer_config = self.config_transformer(self.args)
+
+        criterion = torch.nn.BCELoss()
+        # pos_weight = torch.tensor([10.0]).to(device=torch.device("cuda:" + str(self.args.device)))
+        # criterion = torch.nn.BCEWithLogitsLoss(pos_weight=pos_weight)
+        # criterion = torch.nn.CrossEntropyLoss()
+        m = torch.nn.Sigmoid()
+
+        # save path of experiment results, models, logs, and params   
+        curr_time = time.strftime('%Y-%m-%d-%H:%M:%S', time.localtime()) 
+        experiment_dir = os.path.join(self.config.EXPERIMENT_DIR, f"{self.experiment}", f"{model_class}", curr_time)
+        result_root_dir = os.path.join(experiment_dir, "result")
+        model_root_dir = os.path.join(experiment_dir, "model")
+        log_fp = os.path.join(experiment_dir, "log.txt")
+        params_fp = os.path.join(experiment_dir, "params.json")
+        
         create_dir(experiment_dir)
         if save_result:
             create_dir(result_root_dir)
@@ -91,207 +197,313 @@ class Validation_Experiment():
             json.dump(params, f, indent=4)
 
         # Start experiment
-        if self.experiment == 'cancer_specific' or self.experiment == 'mix':
+            
+        if self.experiment == 'cancer_specific' or self.experiment == 'cancer_specific_all':
 
+            # wandb setting
+            if wandb_track:
+                run = wandb.init(group=f"{self.experiment}", name=f"{self.experiment}_{curr_time}", reinit=True)
+            else:
+                run = None
+            
             for cancer_type in self.config.task.cancer:
             
                 result_path = os.path.join(result_root_dir, f"train_result_{cancer_type}.csv")
-                clear_result(result_path)
+                # clear_result(result_path)
                 
                 for cv in range(1,6):
                     data_test = np.load(os.path.join(self.config.SAVED_DATA_DIR, "SL_train_test_data", self.experiment, f"test_{cancer_type}_fold_{cv}.npy"))
                     data_train = np.load(os.path.join(self.config.SAVED_DATA_DIR, "SL_train_test_data", self.experiment, f"train_{cancer_type}_fold_{cv}.npy"))
+
+                    print(f"{cancer_type}_cv{cv}, train data size={len(data_train)}, test data size={len(data_test)}")
+                    
+                    model_save_path = os.path.join(model_root_dir, cancer_type, f"model_{cancer_type}_cv{cv}.pth")
+                    create_dir(os.path.join(model_root_dir, cancer_type))
+
+                    if model_class == 'geneformer':
+                        train_loader, test_loader = load_train_data_SL(data_test, data_train, self.geneformer_emb_map, self.args.batch_size)
+                        model = MLP(num_layers=2, input_dim=self.args.mlp_input_dim, hidden_dim=self.args.mlp_hidden_dim, output_dim=self.args.mlp_output_dim)
+                    elif model_class == 'transformer':
+                        train_loader, test_loader = load_train_data_SL(data_test, data_train, self.gene_sent_map, self.args.batch_size, self.args.n, bi_rpr=True, sent_mask=self.sent_mask_map, emb_mtx=self.geneformer_emb_mtx, augmentation=self.args.augmentation)
+                        if 'mix_checkpoint' in self.config.task or 'pretrain_checkpoint' in self.config.task:
+                            ckp_args, ckp = self.load_pretrain_checkpoint(self.args, self.config, cv)
+                            transformer_config = self.config_transformer(ckp_args)
+                            model = Transformer_Finetuner(config=transformer_config)
+                            model.load_state_dict(ckp, strict=True)
+                        else:
+                            transformer_config = self.config_transformer(self.args)
+                            model = Transformer_Finetuner(config=self.transformer_config)
+
+                    train(self.args.device, model, criterion, m, self.args, train_loader, model_save_path, result_path, test_loader, save_model=save_model, save_result=save_result, model_class=model_class, wandb_run=run)
+
+                # get average results
+                if wandb_track:
+                    avg_metrics = mean_metrics(result_path)
+                    run.log(avg_metrics)
+
+                if save_result:
+                    average_metrics(result_path)
+
+            if wandb_track: 
+                run.finish()
+        
+
+
+        if self.experiment == 'mix' or self.experiment == 'mix_all':
+
+            # wandb setting
+            if wandb_track:
+                run = wandb.init(group=f"{self.experiment}", name=f"{self.experiment}_{curr_time}", reinit=True)
+            else:
+                run = None
+
+            for cancer_type in self.config.task.cancer:
+            
+                result_path = os.path.join(result_root_dir, f"train_result_{cancer_type}.csv")
+                # clear_result(result_path)
+
+                
+                
+                for cv in range(1,6):
+                    data_test = np.load(os.path.join(self.config.SAVED_DATA_DIR, "SL_train_test_data", self.experiment, f"test_{cancer_type}_fold_{cv}.npy"))
+                    data_train = np.load(os.path.join(self.config.SAVED_DATA_DIR, "SL_train_test_data", self.experiment, f"train_{cancer_type}_fold_{cv}.npy"))
+
+                    print(f"{cancer_type}_cv{cv}, train data size={len(data_train)}, test data size={len(data_test)}")
                     
                     model_save_path = os.path.join(model_root_dir, f"model_{cancer_type}_cv{cv}.pth")
-
-                    if self.model_class == 'geneformer':
+                    
+                    if model_class == 'geneformer':
                         train_loader, test_loader = load_train_data_SL(data_test, data_train, self.geneformer_emb_map, self.args.batch_size)
-                        model = MLP(num_layers=2, input_dim=self.args.input_dim, hidden_dim=self.args.hidden_dim, output_dim=self.args.output_dim)
-                    elif self.model_class == 'transformer':
-                        train_loader, test_loader = load_train_data_SL(data_test, data_train, self.gene_sent_map, self.args.batch_size, bi_rpr=True, sent_mask=self.sent_mask_map, emb_mtx=self.geneformer_emb_mtx)
-                        model = Transformer_Finetuner(config=self.transformer_config)
+                        model = MLP(num_layers=2, input_dim=self.args.mlp_input_dim, hidden_dim=self.args.mlp_hidden_dim, output_dim=self.args.mlp_output_dim)
+                    elif model_class == 'transformer':
+                        train_loader, test_loader = load_train_data_SL(data_test, data_train, self.gene_sent_map, self.args.batch_size, self.args.n, bi_rpr=True, sent_mask=self.sent_mask_map, emb_mtx=self.geneformer_emb_mtx, augmentation=self.args.augmentation)
+                        if 'pretrain_checkpoint' in self.config.task:
+                            ckp_args, ckp = self.load_pretrain_checkpoint(self.args, self.config, cv)
+                            transformer_config = self.config_transformer(ckp_args)
+                            model = Transformer_Finetuner(config=transformer_config)
+                            model.load_state_dict(ckp, strict=True)
+                        else:
+                            transformer_config = self.config_transformer(self.args)
+                            model = Transformer_Finetuner(config=transformer_config)
 
-                    train(self.args.device, model, criterion, m, self.args, train_loader, model_save_path, result_path, test_loader, save_model=save_model, save_result=save_result, model_class=self.model_class)
-                
+                    
+                    train(self.args.device, model, criterion, m, self.args, train_loader, model_save_path, result_path, test_loader, save_model=save_model, save_result=save_result, model_class=model_class, wandb_run=run)
+
                 # get average results
-                average_metrics(result_path)
+                if wandb_track:
+                    avg_metrics = mean_metrics(result_path)
+                    run.log(avg_metrics)
+
+                if save_result:
+                    average_metrics(result_path)
+
+            if wandb_track: 
+                run.finish()
 
 
         # elif self.experiment == 'cross_cancer':
-
-        #     for cancer, cancer_name in self.id2cancer_map.items():
-
-        #         data_test = np.load(os.path.join(self.config.SAVED_DATA_DIR, "SL_train_test_data", self.experiment, f"test_{cancer_name}.npy"))
-        #         data_train = np.load(os.path.join(self.config.SAVED_DATA_DIR, "SL_train_test_data", self.experiment, f"train_{cancer_name}.npy"))
-
-        #         model_save_path = os.path.join(model_root_dir, f"model_transfer_{cancer_name}.pth")
-
-        #         result_path = os.path.join(result_root_dir, f"train_result_transfer_{cancer_name}.csv")
-        #         clear_result(result_path)
-
-        #         for s in range(1,6):
-        #             set_seed(s)
-
-        #             if self.model_class == 'geneformer':
-        #                 train_loader, test_loader = load_train_data_SL(data_test, data_train, self.geneformer_emb_map, self.args.batch_size)
-        #                 model = MLP(num_layers=2, input_dim=self.args.input_dim, hidden_dim=self.args.hidden_dim, output_dim=self.args.output_dim)
-        #             elif self.model_class == 'transformer':
-        #                 train_loader, test_loader = load_train_data_SL(data_test, data_train, self.gene_sent_map, self.args.batch_size, bi_rpr=True, sent_mask=self.sent_mask_map, emb_mtx=self.geneformer_emb_mtx)
-        #                 model = Transformer_Finetuner(config=self.transformer_config)
-
-        #             train(self.args.device, model, criterion, m, self.args, train_loader, model_save_path, result_path, test_loader, save_model=save_model, save_result=save_result, model_class=self.model_class)
-
-        #         # get average results
-        #         average_metrics(result_path)
-
-        elif self.experiment == 'cross_cancer':
+        elif self.experiment == 'cross_cancer' or self.experiment == 'cross_cancer_all':
 
             result_path = os.path.join(result_root_dir, f"train_result_cross_cancer.csv")
-            clear_result(result_path)
+            # clear_result(result_path)
 
-            for cancer, cancer_name in self.id2cancer_map.items():
+            if wandb_track:
+                run = wandb.init(group=f"{self.experiment}", name=f"{self.experiment}_{curr_time}", reinit=True)
+            else:
+                run = None
+
+            # for cancer, cancer_name in self.id2cancer_map.items():
+            for cancer_name in self.config.task.cancer:
 
                 model_save_path = os.path.join(model_root_dir, f"model_transfer2{cancer_name}.pth")
 
                 data_test = np.load(os.path.join(self.config.SAVED_DATA_DIR, "SL_train_test_data", self.experiment, f"test_{cancer_name}.npy"))
                 data_train = np.load(os.path.join(self.config.SAVED_DATA_DIR, "SL_train_test_data", self.experiment, f"train_{cancer_name}.npy"))
 
-                if self.model_class == 'geneformer':
-                    train_loader, test_loader = load_train_data_SL(data_test, data_train, self.geneformer_emb_map, self.args.batch_size)
-                    model = MLP(num_layers=2, input_dim=self.args.input_dim, hidden_dim=self.args.hidden_dim, output_dim=self.args.output_dim)
-                elif self.model_class == 'transformer':
-                    train_loader, test_loader = load_train_data_SL(data_test, data_train, self.gene_sent_map, self.args.batch_size, bi_rpr=True, sent_mask=self.sent_mask_map, emb_mtx=self.geneformer_emb_mtx)
-                    model = Transformer_Finetuner(config=self.transformer_config)
+                print(f"{cancer_name}, train data size={len(data_train)}, test data size={len(data_test)}")
 
-                train(self.args.device, model, criterion, m, self.args, train_loader, model_save_path, result_path, test_loader, save_model=save_model, save_result=save_result, model_class=self.model_class)
+                if model_class == 'geneformer':
+                    train_loader, test_loader = load_train_data_SL(data_test, data_train, self.geneformer_emb_map, self.args.batch_size)
+                    model = MLP(num_layers=2, input_dim=self.args.mlp_input_dim, hidden_dim=self.args.mlp_hidden_dim, output_dim=self.args.mlp_output_dim)
+                elif model_class == 'transformer':
+                    train_loader, test_loader = load_train_data_SL(data_test, data_train, self.gene_sent_map, self.args.batch_size, self.args.n, bi_rpr=True, sent_mask=self.sent_mask_map, emb_mtx=self.geneformer_emb_mtx, augmentation=self.args.augmentation)
+                    if 'pretrain_checkpoint' in self.config.task:
+                        origin_model = Transformer_Finetuner(config=self.transformer_config)
+                        ckp_args, ckp = self.load_pretrain_checkpoint(self.args, self.config, cv)
+                        transformer_config = self.config_transformer(ckp_args)
+                        model = Transformer_Finetuner(config=transformer_config)
+                        model.load_state_dict(ckp, strict=True)
+                    else:
+                        transformer_config = self.config_transformer(self.args)
+                        model = Transformer_Finetuner(config=transformer_config)
+
+                train(self.args.device, model, criterion, m, self.args, train_loader, model_save_path, result_path, test_loader, save_model=save_model, save_result=save_result, model_class=model_class, wandb_run=run)
 
             # get average results
-            average_metrics(result_path)
+            if wandb_track:
+                avg_metrics = mean_metrics(result_path)
+                run.log(avg_metrics)
+                run.finish()
 
-
-    def save_train_test_data(self, data_total, cancer_type):
-
-        save_dir = os.path.join(self.config.SAVED_DATA_DIR, "SL_train_test_data", self.config.task.type)
-        create_dir(save_dir)
-
-        if self.experiment == 'cancer_specific' or self.experiment == 'mix':
-            for cv in range(1,6):
-                data_test, data_train = get_train_test_SL(data_total, cv=cv, data_all=False, return_idx=False)
-                np.save(os.path.join(save_dir, f"test_{cancer_type}_fold_{cv}.npy"), data_test)
-                np.save(os.path.join(save_dir, f"train_{cancer_type}_fold_{cv}.npy"), data_train)
-        elif self.experiment == 'cross_cancer':
-            for cancer, cancer_name in self.id2cancer_map.items():
-                data_test, data_train = get_train_test_SL(data_total, data_all=False, split_by_cancer=True, test_cancer=cancer, return_idx=False)
-                np.save(os.path.join(save_dir, f"test_{cancer_name}.npy"), data_test)
-                np.save(os.path.join(save_dir, f"train_{cancer_name}.npy"), data_train)
-
-
-    def get_benchmark_data(self):
-
-        save_dir = os.path.join(self.config.SAVED_DATA_DIR, "benchmark_data")
-        create_dir(os.path.join(save_dir, "cancer_specific"))
-        create_dir(os.path.join(save_dir, "mix"))
-        create_dir(os.path.join(save_dir, "cross_cancer"))
-
-        # cancer_specific
-        for cancer_type in self.cancer_list:
-            for cv in range(1,6):
-                data_test = np.load(os.path.join(self.config.SAVED_DATA_DIR, "SL_train_test_data", "cancer_specific", f"test_{cancer_type}_fold_{cv}.npy"))
-                data_train = np.load(os.path.join(self.config.SAVED_DATA_DIR, "SL_train_test_data", "cancer_specific", f"train_{cancer_type}_fold_{cv}.npy"))
-                df_test = transfer_data_idx(data_test, self.gene2id_map, self.id2cancer_map)
-                df_train = transfer_data_idx(data_train, self.gene2id_map, self.id2cancer_map)
-                df_test.to_csv(os.path.join(save_dir, "cancer_specific", f"test_{cancer_type}_fold_{cv}.csv"), index=False)
-                df_train.to_csv(os.path.join(save_dir, "cancer_specific", f"train_{cancer_type}_fold_{cv}.csv"), index=False)
-        # mix
-        for cv in range(1,6):
-            data_test = np.load(os.path.join(self.config.SAVED_DATA_DIR, "SL_train_test_data", "mix", f"test_all_fold_{cv}.npy"))
-            data_train = np.load(os.path.join(self.config.SAVED_DATA_DIR, "SL_train_test_data", "mix", f"train_all_fold_{cv}.npy"))
-            df_test = transfer_data_idx(data_test, self.gene2id_map, self.id2cancer_map)
-            df_train = transfer_data_idx(data_train, self.gene2id_map, self.id2cancer_map)
-            df_test.to_csv(os.path.join(save_dir, "mix", f"test_all_fold_{cv}.csv"), index=False)
-            df_train.to_csv(os.path.join(save_dir, "mix", f"train_all_fold_{cv}.csv"), index=False)
-        # cross_cancer
-        for cancer, cancer_name in self.id2cancer_map.items():
-            data_test = np.load(os.path.join(self.config.SAVED_DATA_DIR, "SL_train_test_data", "cross_cancer", f"test_{cancer_name}.npy"))
-            data_train = np.load(os.path.join(self.config.SAVED_DATA_DIR, "SL_train_test_data", "cross_cancer", f"train_{cancer_name}.npy"))
-            df_test = transfer_data_idx(data_test, self.gene2id_map, self.id2cancer_map)
-            df_train = transfer_data_idx(data_train, self.gene2id_map, self.id2cancer_map)
-            df_test.to_csv(os.path.join(save_dir, "cross_cancer", f"test_{cancer_name}.csv"), index=False)
-            df_train.to_csv(os.path.join(save_dir, "cross_cancer", f"train_{cancer_name}.csv"), index=False)
-
-
-    # def get_random_auc(self, data_total):
-
-    #     if self.experiment == 'cancer_specific':
-    #         rand_auc_res = []
-    #         rand_aupr_res = []
-
-    #         for cv in range(1,6):
-    #             _, test_loader = load_train_data_SL(data_total, self.geneformer_emb_map, self.args.batch_size, cv=cv)
-    #             rand_auc, rand_aupr = calc_random_auc(test_loader)
-    #             rand_auc_res.append(rand_auc)
-    #             rand_aupr_res.append(rand_aupr)
-
-    #         for met, res in {"AUC":rand_auc_res,"AUPR":rand_aupr_res}.items():
-    #             mean = np.round(np.mean(res),4)
-    #             std = np.round(np.std(res),4)
-    #             print(met, str(mean)+" ("+str(std)+")")
-
-    #     elif self.experiment == 'cross_cancer':
-    #         for cancer, cancer_name in self.id2cancer_map.items():
-    #             rand_auc_res = []
-    #             rand_aupr_res = []
-    #             for s in range(1,6):
-    #                 _, test_loader = load_train_data_SL(data_total, self.geneformer_emb_map, self.args.batch_size, split_by_cancer=True, test_cancer=cancer)
-    #                 rand_auc, rand_aupr = calc_random_auc(test_loader)
-    #                 rand_auc_res.append(rand_auc)
-    #                 rand_aupr_res.append(rand_aupr)
-
-    #             for met, res in {"AUC":rand_auc_res,"AUPR":rand_aupr_res}.items():
-    #                 mean = np.round(np.mean(res),4)
-    #                 std = np.round(np.std(res),4)
-    #                 print(cancer_name, met, str(mean)+" ("+str(std)+")")
-
-
-    # def infer_primpartner(self, data_fname, output_dir):
-
-    #     data_total = np.load(os.path.join(self.args.data_dir, f"{data_fname}.npy"))
-
-    #     if self.model_class == 'geneformer':
-    #         model = MLP(num_layers=2, input_dim=self.args.input_dim, hidden_dim=self.args.hidden_dim, output_dim=self.args.output_dim, use_selayer=False)
-    #         loader = load_train_data_SL(data_total, self.geneformer_emb_map, self.args.batch_size, data_all=True)
-    #     elif self.model_class == 'transformer':
-    #         model = Transformer_Finetuner(embeddings=self.pretrained_emb, config=self.transformer_config)
-    #         loader = load_train_data_SL(data_total, self.gene_sent_map, self.args.batch_size, bi_rpr=True, sent_mask=self.sent_mask_map, data_all=True)
-
-    #     for cv in range(1,6):
-    #         experiment_name = self.experiment_name+f"_cv{cv}"
-
-    #         predict_res, _, _, primary_gene, partner_gene = SL_test_prim_partner(device=self.args.device, model=model,
-    #             pretrain_file=os.path.join(self.args.model_savepath, f"model_SL_{experiment_name}.pth"),
-    #             gene2id_file=self.args.gene2id_file,
-    #             data_loader=loader)
+            if save_result:
+                average_metrics(result_path)
             
-    #         result_df = pd.DataFrame(data=predict_res.reshape(-1,1), columns=["score"])
-    #         result_df.insert(loc=0, column='partner_gene', value=partner_gene)
-    #         result_df.insert(loc=0, column='primary_gene', value=primary_gene)
 
-    #         result_df = result_df.sort_values(by=["score"],ascending=False)
+    def independent_test(self):
 
-    #         result_df.to_csv(os.path.join(output_dir, f"{data_fname}_{experiment_name}.csv"))
+        if self.experiment != "independent_test":
+            raise Exception("Please set independent test configs!")
+
+        output_dir = os.path.join(self.config.EXPERIMENT_DIR, self.experiment)
+        create_dir(output_dir)
+        pred_dir = os.path.join(output_dir, "pred")
+        eval_dir = os.path.join(output_dir, "eval")
+        eval_cv_dir = os.path.join(output_dir, "eval_cv")
+        
+        test_datasets = self.config.SL_dataset
+        model_dirs = self.config.task.model
+
+        for data_type in list(test_datasets.keys()):
+            if data_type != "general":
+                context = test_datasets[data_type]["context"]
+
+                model_cfg = model_dirs[context]
+
+                # for scenario, model_cfg in model_dirs.items():
+                create_dir(os.path.join(pred_dir, context))
+                create_dir(os.path.join(eval_dir, context))
+                create_dir(os.path.join(eval_cv_dir, context))
+
+                ## set model parameters
+                with open(os.path.join(model_cfg.path, 'params.json'), 'r') as f:
+                    model_params = json.load(f)
+                for arg in vars(self.args):
+                    if arg in model_params:
+                        setattr(self.args, arg, model_params[arg])
+
+                transformer_config = self.config_transformer(self.args)
+
+                data = np.load(os.path.join(self.config.SAVED_DATA_DIR, "independent_test_data", f"{data_type}.npy"))
+                if model_cfg.model_type == 'geneformer':
+                    loader = load_all_data_SL(data, self.geneformer_emb_map, self.args.batch_size)
+                elif model_cfg.model_type == 'transformer':
+                    loader = load_all_data_SL(data, self.gene_sent_map, self.args.batch_size, self.args.n, bi_rpr=True, sent_mask=self.sent_mask_map, emb_mtx=self.geneformer_emb_mtx)
+
+                df_all = []
+                if context == 'mix':
+                    model_dir = os.path.join(model_cfg.path, "model")
+                else:
+                    model_dir = os.path.join(model_cfg.path, "model", context)
+
+                for i, model_savepath in enumerate(os.listdir(model_dir)):
+            
+                    if model_cfg.model_type == 'geneformer':
+                        model = MLP(num_layers=2, input_dim=self.args.mlp_input_dim, hidden_dim=self.args.mlp_hidden_dim, output_dim=self.args.mlp_output_dim)
+                    elif model_cfg.model_type == 'transformer':
+                        model = Transformer_Finetuner(config=self.transformer_config)
+                    
+                    predict_res, true_label, cancer, primary_gene, partner_gene = SL_test_prim_partner(device=self.args.device, model=model,
+                        pretrain_file=os.path.join(model_dir, model_savepath),
+                        data_loader=loader,
+                        gene2id_map=self.gene2id_map,
+                        cancer2id_map=self.cancer2id_map
+                    )
+                    pred_result = pd.DataFrame(data=np.concatenate((np.array(primary_gene).reshape(-1,1),
+                                                                np.array(partner_gene).reshape(-1,1),
+                                                                np.array(cancer).reshape(-1,1),
+                                                                predict_res.reshape(-1,1),
+                                                                true_label.reshape(-1,1)), axis=1),
+                                                                columns = ["gene1","gene2","cancer","predict","true"])
+                    pred_result = pred_result.astype({"gene1":'str',"gene2":'str',"cancer":'str',"predict":'float32',"true":'float32'})
+                    pred_result.to_csv(os.path.join(pred_dir, context, f"{data_type}_{i}.csv"), index=False)
+                    label_type = test_datasets[data_type].label_type
+                    eval_result = independent_evaluate(pred_result, label_type)
+                    df_all.append(eval_result)
+                
+                df_concat = pd.concat(df_all)
+                avg_mean = np.round(df_concat.mean(), 4)
+                avg_std = np.round(df_concat.std(), 4)
+                # avg_results = pd.concat([pd.DataFrame([avg_mean]), pd.DataFrame([avg_std])], axis=0)
+                # avg_results.index = ['mean','std']
+                avg_results = pd.DataFrame([str(avg_mean[i])+" ("+str(avg_std[i])+")" for i in range(len(avg_mean))]).T
+                avg_results.columns = df_concat.columns
+
+                avg_results.to_csv(os.path.join(eval_dir, context, f"{data_type}_{model_cfg.model_type}.csv"), index=False)
+                df_concat.to_csv(os.path.join(eval_cv_dir, context, f"{data_type}_{model_cfg.model_type}.csv"), index=False)
+
+
+    def infer_primpartner(self):
+
+        if self.experiment != "inference":
+            raise Exception("Please set inference configs!")
+
+        output_dir = os.path.join(self.config.EXPERIMENT_DIR, self.experiment, self.config.task.name)
+        create_dir(output_dir)
+
+        data_fps = self.config.task.data
+        model_dirs = self.config.task.model
+
+        data_all = {}
+        for data_name, data_fp in data_fps.items():
+            data_all[data_name] = np.load(data_fp)
+        
+        for data_name, data in data_all.items():
+
+            for scenario, model_cfg in model_dirs.items():
+                
+                ## set model parameters
+                with open(os.path.join(model_cfg.path, 'params.json'), 'r') as f:
+                    model_params = json.load(f)
+                for arg in vars(self.args):
+                    if arg in model_params:
+                        setattr(self.args, arg, model_params[arg])
+                
+                transformer_config = self.config_transformer(self.args)
+
+                if model_cfg.model_type == 'geneformer':
+                    loader = load_all_data_SL(data, self.geneformer_emb_map, self.args.batch_size)
+                elif model_cfg.model_type == 'transformer':
+                    loader = load_all_data_SL(data, self.gene_sent_map, self.args.batch_size, self.args.n, bi_rpr=True, sent_mask=self.sent_mask_map, emb_mtx=self.geneformer_emb_mtx)
+                
+                df_all = []
+                for model_savename in os.listdir(os.path.join(model_cfg.path, "model")):
+
+                    if model_cfg.model_type == 'geneformer':
+                        model = MLP(num_layers=2, input_dim=self.args.mlp_input_dim, hidden_dim=self.args.mlp_hidden_dim, output_dim=self.args.mlp_output_dim)
+                    elif model_cfg.model_type == 'transformer':
+                        model = Transformer_Finetuner(config=transformer_config)
+                    
+                    predict_res, _, _, primary_gene, partner_gene = SL_test_prim_partner(device=self.args.device, model=model,
+                        pretrain_file=os.path.join(model_cfg.path, "model", model_savename),
+                        data_loader=loader,
+                        gene2id_map=self.gene2id_map,
+                        cancer2id_map=self.cancer2id_map
+                    )
+
+                    result_df = pd.DataFrame(data=predict_res.reshape(-1,1), columns=["score"])
+                    result_df.insert(loc=0, column='partner_gene', value=partner_gene)
+                    result_df.insert(loc=0, column='primary_gene', value=primary_gene)
+                    result_df = result_df.sort_values(by=["score"],ascending=False).reset_index()
+                    print(data_name, scenario, result_df[result_df['partner_gene']=='PRKDC'].index[0], '/', str(len(result_df)))
+                    df_all.append(result_df)
+
+                df_concat = pd.concat(df_all)
+                avg_score = df_concat.groupby('partner_gene')['score'].mean().reset_index()
+                avg_score = avg_score.sort_values(by=["score"],ascending=False)
+                avg_score.to_csv(os.path.join(output_dir, f"{scenario}_{data_name}.csv"), index=False)
 
 
 
-def SL_test_prim_partner(device, model, pretrain_file, gene2id_file, data_loader):
 
-    with open(gene2id_file, 'rb') as f:
-        gene2id_map = pkl.load(f)
+def SL_test_prim_partner(device, model, pretrain_file, data_loader, gene2id_map, cancer2id_map):
+
     id2gene_map = {i:g for g,i in gene2id_map.items()}
+    id2cancer_map = {i:c for c,i in cancer2id_map.items()}
 
-    params_pretrain = torch.load(pretrain_file).state_dict().copy()
-    if 'emb.weight' in params_pretrain:
-        del params_pretrain['emb.weight']
-    model.load_state_dict(params_pretrain, strict=False)
+    params_pretrain = torch.load(pretrain_file)
+    model.load_state_dict(params_pretrain, strict=True)
+    for p in model.parameters():
+        p.requires_grad = False
     model = model.to(device)
     model.eval()
 
@@ -322,84 +534,55 @@ def SL_test_prim_partner(device, model, pretrain_file, gene2id_file, data_loader
 
         predict_res.append(res)
         true_label.append(label)
-        context.append(cancer)
+        context.extend([id2cancer_map[c.item()] for c in cancer])
         partner_gene_name.extend([id2gene_map[g.item()] for g in g2])
         primary_gene_name.extend([id2gene_map[g.item()] for g in g1])
         
     predict_res = torch.cat(predict_res, dim=0)
     true_label = torch.cat(true_label, dim=0)
-    context = torch.cat(context, dim=0)
 
-    return predict_res.numpy(), true_label.numpy(), context.numpy(), primary_gene_name, partner_gene_name
-
+    return predict_res.numpy(), true_label.numpy(), context, primary_gene_name, partner_gene_name
 
 
 
-class Downstream_evaluate():
 
-    def __init__(self, data, type):
+def independent_evaluate(data, type):
 
-        self.data = data
-        self.predict = data["predict"].values
-        self.int_predict = np.around(self.predict,0)
-        self.true = data["true"].values
+    predict = data["predict"].values
+    int_predict = np.around(predict, 0)
+    true = data["true"].values
 
-        self.predict_pair_ranked = list(data.sort_values(by='predict', ascending=False).index)
-        self.true_pair_ranked = list(data.sort_values(by='true', ascending=True).index) # viability of rank
+    # predict_pair_ranked = list(data.sort_values(by='predict', ascending=False).index)
+    # true_pair_ranked = list(data.sort_values(by='true', ascending=True).index)
 
-        topk_range = [10, 20, 30, 50, 100]
-        self.topk = [k for k in topk_range if k < len(data)]
+    topk_range = [10, 20, 30, 50, 100]
+    topk = [k for k in topk_range if k < len(data)]
 
-        self.type = type
+    if type == "binary":
+        result = {
+            # "auc": metrics.roc_auc_score(true, predict),
+            # "aupr": metrics.average_precision_score(true, predict),
+            # "f1": metrics.f1_score(true, int_predict),
+            # "precision": metrics.precision_score(true, int_predict),
+            # "recall": metrics.recall_score(true, int_predict),
+            # "acc": metrics.accuracy_score(true, int_predict),
+        }
+        # ndcg for binary
+        # true_hit = list(data[data["true"]==1].index)
+        for k in topk:
+            # result["ndcg_bin@"+str(k)], result["hit@"+str(k)] = ndcg_bin(k, predict_pair_ranked, true_hit)
+            result["ndcg_bin@"+str(k)] = ndcg_score(true[np.newaxis,:], predict[np.newaxis,:], k=k)
+            result["precision@"+str(k)] = precision_at_k(true, predict, k=k)
+            result["recall@"+str(k)] = recall_at_k(true, predict, k=k)
+            result["hit@"+str(k)] = hit_at_k_bin(true, predict, k=k)
 
-    def calc_metrics(self):
+    elif type == "rank":
+        result = {}
+        rel = np.max(true)-true
+        for k in topk:
+            # result["ndcg@"+str(k)], result["hit@"+str(k)] = ndcg(k, predict_pair_ranked, true_pair_ranked)
+            result["ndcg@"+str(k)] = ndcg_score(rel[np.newaxis,:], predict[np.newaxis,:], k=k)
+            # result["hit@"+str(k)] = hit_at_k(rel, predict, k=k)
+    
 
-        if self.type == "binary":
-        
-            result = {
-                "auc": metrics.roc_auc_score(self.true, self.predict),
-                "aupr": metrics.average_precision_score(self.true, self.predict),
-                "f1": metrics.f1_score(self.true, self.int_predict),
-                "precision": metrics.precision_score(self.true, self.int_predict),
-                "recall": metrics.recall_score(self.true, self.int_predict),
-                "acc": metrics.accuracy_score(self.true, self.int_predict),
-            }
-
-            # ndcg for binary
-            true_hit = list(self.data[self.data["true"]==1].index)
-            for k in self.topk:
-                result["ndcg_bin@"+str(k)], result["hit@"+str(k)] = ndcg_bin(k, self.predict_pair_ranked, true_hit)
-
-
-        elif self.type == "rank":
-
-            result = {}
-
-            for k in self.topk:
-                result["ndcg@"+str(k)], result["hit@"+str(k)] = ndcg(k, self.predict_pair_ranked, self.true_pair_ranked)
-
-
-        elif self.type == "pos_score":
-
-            result = {
-                # "wilcoxon_p": ranksums(true, predict)[1]
-                "spearman_r": stats.spearmanr(self.true, self.predict).correlation
-            }
-
-            for k in self.topk:
-                result["ndcg@"+str(k)], result["hit@"+str(k)] = ndcg(k, self.predict_pair_ranked, self.true_pair_ranked)
-
-
-        elif self.type == "bi_score":
-
-
-            result = {
-                # "wilcoxon_p": ranksums(true, predict)[1]
-                "spearman_r": stats.spearmanr(self.true, self.predict).correlation
-            }
-
-            for k in self.topk:
-                result["ndcg@"+str(k)], result["hit@"+str(k)] = ndcg(k, self.predict_pair_ranked, self.true_pair_ranked)
-        
-
-        return pd.DataFrame(result, index=[0])
+    return pd.DataFrame(result, index=[0])

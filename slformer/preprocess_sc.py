@@ -3,6 +3,7 @@ import numpy as np
 import anndata as ad
 import scanpy as sc
 import os
+import sys
 import yaml
 import easydict
 import argparse
@@ -16,6 +17,8 @@ from datasets import Dataset
 from util import create_dir
 from dataset import get_gene_sent_map
 
+sys.path.append("/home/jienihu/sc/GeneFormer")
+from geneformer import TranscriptomeTokenizer, EmbExtractor
 
 
 class Data_Preprocess():
@@ -35,7 +38,6 @@ class Data_Preprocess():
             "coexp_graph": os.path.join(self.config.sc_dir, "coexp_graph"),
             "genesent_root": os.path.join(self.config.sc_dir, "gene_sentence"),
             "go_anno_df": os.path.join("./data", "GO", "go_anno_popular.csv")
-            # "go_anno_df": os.path.join("./data", "GO", "go_anno_gosemsim.csv")
         }
 
 
@@ -53,10 +55,10 @@ class Data_Preprocess():
     def get_common_data(self, sent_n):
 
         common_data_path = {
-            "geneformer_emb_map": os.path.join(self.data_path_repository["map"], "geneformer_emb.pkl"),
-            "geneformer_emb_mtx": os.path.join(self.data_path_repository["emb"], "geneformer_emb.npy"),
-            "gene2sent_map": os.path.join(self.data_path_repository["map"], f"gene2sent_n{sent_n}.pkl"),
-            "sent_mask_map": os.path.join(self.data_path_repository["map"], f"sent_mask_n{sent_n}.pkl"),
+            "geneformer_emb_map": os.path.join(self.data_path_repository["map"], "geneformer_emb_sc.pkl"),
+            "geneformer_emb_mtx": os.path.join(self.data_path_repository["emb"], "geneformer_emb_sc.npy"),
+            "gene2sent_map": os.path.join(self.data_path_repository["map"], f"gene2sent_n{sent_n}_sc.pkl"),
+            "sent_mask_map": os.path.join(self.data_path_repository["map"], f"sent_mask_n{sent_n}_sc.pkl"),
             "gene2id_map": os.path.join(self.data_path_repository["map"], "gene2id.pkl"),
             # "cancer_list": os.path.join(self.data_path_repository["map"], "cancer_list.txt"),
         }
@@ -88,7 +90,6 @@ class Data_Preprocess():
 
         go_anno = pd.read_csv(self.data_path_repository["go_anno_df"])
         gene2go_map = dict(zip(go_anno["gene_id"], go_anno["GO_id"]))
-        # gene2go_map = dict(zip(go_anno["gene_id"], go_anno["annotation"]))
         common_data["gene2go_map"] = gene2go_map
 
         return common_data
@@ -167,6 +168,23 @@ class Data_Preprocess():
         print("sc data processing is complete!")
     
 
+    def split_sc_data(self, ncell=200, seed=1):
+        
+        np.random.seed(seed)
+        cancer_list = list(self.config.sc_samples.keys())
+        self.split_data = []
+        for cancer in cancer_list:
+            adata_cancer = sc.read_h5ad(os.path.join(self.data_path_repository["sc_processed"],f"{cancer}_expression.h5ad"))
+            ngroups = len(adata_cancer) // ncell
+            permut_idx = np.random.permutation(len(adata_cancer))
+            for i in range(ngroups):
+                subset_idx = permut_idx[i * ncell : (i + 1) * ncell]
+                subset = adata_cancer[subset_idx].copy()
+                self.split_data.append(subset)
+        
+        print("Total groups of cells:", len(self.split_data), ", each with", ncell, "cells.")
+
+
     def data_prepare_coexp(self, additional=False):
 
         if not additional:
@@ -176,59 +194,105 @@ class Data_Preprocess():
 
         # coexp matrix
         print("Start processing coexp data...")
-        for cancer in cancer_list:
-            adata_cancer = sc.read_h5ad(os.path.join(self.data_path_repository["sc_processed"],f"{cancer}_expression.h5ad"))
-            calc_coexp_corr(cancer, adata_cancer,
-                            output_dir=self.data_path_repository["coexp_data"])
+        for i, adata_split in enumerate(self.split_data):
+            # calc_coexp_corr("group"+str(i), adata_split,
+            #                 output_dir=self.data_path_repository["coexp_data"])
+            calc_coexp_corr("group"+str(i), adata_split,
+                            corr_output_dir=self.data_path_repository["coexp_data"],
+                            graph_output_dir=self.data_path_repository["coexp_graph"],
+                            gene_list_file=os.path.join(self.data_path_repository["map"], "gene_list.txt"), 
+                            percentile=99)
         
-        # coexp graph
-        print("Start processing coexp graphs...")
-        for cancer in cancer_list:
-            construct_coexp_graph(cancer, 
-                                  coexp_dir=self.data_path_repository["coexp_data"], 
-                                  output_dir=self.data_path_repository["coexp_graph"], 
-                                  gene_list_file=os.path.join(self.data_path_repository["map"], "gene_list.txt"), 
-                                  percentile=99)
+        # # coexp graph
+        # print("Start processing coexp graphs...")
+        # for i, adata_split in enumerate(self.split_data):
+        #     construct_coexp_graph("group"+str(i), 
+        #                           coexp_dir=self.data_path_repository["coexp_data"], 
+        #                           output_dir=self.data_path_repository["coexp_graph"], 
+        #                           gene_list_file=os.path.join(self.data_path_repository["map"], "gene_list.txt"), 
+        #                           percentile=99)
+    
+
+    def data_prepare_geneformer(self):
+        # geneformer tokenization and embedding extraction
+        # combine grouped sc data
+        for i, adata_split in enumerate(self.split_data):
+            adata_split.obs['group'] = i
+        cat_adata = ad.concat(self.split_data, merge="same")
+        cat_adata.obs["n_counts"] = np.array(cat_adata.X.astype(bool).sum(axis=1))
+        cat_out_dir = os.path.join(self.config.sc_dir, "concat")
+        create_dir(cat_out_dir)
+        cat_adata.write_h5ad(os.path.join(cat_out_dir, "grouped_cells.h5ad"))
+
+        tk = TranscriptomeTokenizer({"cancer": "cancer", "group": "group"}, 
+                            nproc=16,
+                            gene_median_file="../GeneFormer/geneformer/gene_median_dictionary.pkl",
+                            token_dictionary_file="../GeneFormer/geneformer/token_dictionary.pkl")
+
+        tk.tokenize_data(data_directory = cat_out_dir,
+                        output_directory = os.path.join(self.config.sc_dir, "geneformer_tokenized"), 
+                        output_prefix = "sc_tokenized",
+                        file_format="h5ad")
+        
+        for group in range(len(self.split_data)):
+
+            embex = EmbExtractor(model_type="Pretrained",
+                                    num_classes=3,
+                                    emb_mode='gene',
+                                    filter_data={'group':[group]},
+                                    max_ncells=1000,
+                                    emb_layer=-1,
+                                    forward_batch_size=20,
+                                    nproc=16)
+
+            embs = embex.extract_embs(
+                            model_directory = "../GeneFormer/geneformer-6L",
+                            input_data_file = os.path.join(self.config.sc_dir, "geneformer_tokenized", "sc_tokenized.dataset"),
+                            output_directory = os.path.join(self.config.sc_dir, "geneformer_emb"),
+                            output_prefix = "group"+str(group))
 
         # geneformer emb map
-        if additional:
-            cancer_list_origin = list(self.config.sc_samples.keys())
-            cancer_list_full = cancer_list_origin+cancer_list
-            cancer_list = cancer_list_full
+        # if additional:
+        #     cancer_list_origin = list(self.config.sc_samples.keys())
+        #     cancer_list_full = cancer_list_origin+cancer_list
+        #     cancer_list = cancer_list_full
+        split_list = ["group"+str(group) for group in range(len(self.split_data))]
         
         print("Start integrating geneformer embs...")
         emb_loader = GeneformerEmb_Loader(
             emb_dir=self.config.geneformer_emb_dir,
-            cancer_list=cancer_list,
+            cancer_list=split_list,
             gene2ensembl_file=os.path.join(self.data_path_repository["map"], "gene2ensembl.pkl"),
             gene2id_file=os.path.join(self.data_path_repository["map"], "gene2id.pkl"),
         )
 
         gene_emb_map = emb_loader.integrate_emb()
-        with open(os.path.join(self.data_path_repository["map"], "geneformer_emb.pkl"), 'wb') as f:
+        with open(os.path.join(self.data_path_repository["map"], "geneformer_emb_sc.pkl"), 'wb') as f:
             pkl.dump(gene_emb_map, f)
         
         gene_emb_mtx = emb_loader.construct_emb_mtx(
-            gene2emb_map_fp=os.path.join(self.data_path_repository["map"], "geneformer_emb.pkl"),
+            gene2emb_map_fp=os.path.join(self.data_path_repository["map"], "geneformer_emb_sc.pkl"),
             add_padding=True
         )
-        np.save(os.path.join(self.data_path_repository["emb"], "geneformer_emb.npy"), gene_emb_mtx)
+        np.save(os.path.join(self.data_path_repository["emb"], "geneformer_emb_sc.npy"), gene_emb_mtx)
     
 
 
     def data_prepare_genesent(self, sent_n=200, additional=False):
 
-        if not additional:
-            cancer_list = list(self.config.sc_samples.keys())
-        else:
-            cancer_list = list(self.config.sc_samples.keys())+list(self.config.add_sc_samples.keys())
+        # if not additional:
+        #     cancer_list = list(self.config.sc_samples.keys())
+        # else:
+        #     cancer_list = list(self.config.sc_samples.keys())+list(self.config.add_sc_samples.keys())
+
+        split_list = ["group"+str(group) for group in range(len(self.split_data))]
 
         # gene sentence
-        gene_sent_map, sent_mask_map = construct_gene_sent(self.data_path_repository, cancer_list, n=sent_n)
+        gene_sent_map, sent_mask_map = construct_gene_sent(self.data_path_repository, split_list, sent_n=sent_n)
         
-        with open(os.path.join(self.data_path_repository["map"], f"gene2sent_n{sent_n}.pkl"), 'wb') as f:
+        with open(os.path.join(self.data_path_repository["map"], f"gene2sent_n{sent_n}_sc.pkl"), 'wb') as f:
             pkl.dump(gene_sent_map, f)
-        with open(os.path.join(self.data_path_repository["map"], f"sent_mask_n{sent_n}.pkl"), 'wb') as f:
+        with open(os.path.join(self.data_path_repository["map"], f"sent_mask_n{sent_n}_sc.pkl"), 'wb') as f:
             pkl.dump(sent_mask_map, f)
 
 
@@ -254,15 +318,44 @@ def spearman_corr(adata):
     return data_df.corr(method='spearman')
 
 
-def calc_coexp_corr(cancer, adata, output_dir):
+def calc_coexp_corr(cancer, adata, corr_output_dir, graph_output_dir, gene_list_file, percentile=99):
 
-    output_fp = os.path.join(output_dir, f"{cancer}_coexp.csv")
-    if os.path.exists(output_fp):
+    corr_output_fp = os.path.join(corr_output_dir, f"{cancer}_coexp.csv")
+    graph_fp = os.path.join(graph_output_dir, "graph", f"{cancer}_{percentile}_graph.csv")
+    degree_fp = os.path.join(graph_output_dir, "degree", f"{cancer}_{percentile}_graph.pkl")
+
+    if os.path.exists(corr_output_fp) and os.path.exists(graph_fp):
         print(f"Found existing {cancer} coexp data!")
     else:
-        print(f"***Computing coexp matrix of {cancer} data***")
-        corr = spearman_corr(adata)
-        corr.to_csv(os.path.join(output_dir, f"{cancer}_coexp.csv"))
+        if not os.path.exists(corr_output_fp):
+            print(f"***Computing coexp matrix of {cancer} data***")
+            corr = spearman_corr(adata)
+            corr.to_csv(os.path.join(corr_output_dir, f"{cancer}_coexp.csv"))
+        else:
+            corr = pd.read_csv(os.path.join(corr_output_dir, f"{cancer}_coexp.csv"), index_col=0)
+
+        thr = np.nanpercentile(corr.values, percentile)
+        df_filt = preprocess_coexp_df(corr, thr=thr)
+
+        print("***Building co-expression graphs of", cancer, "data with thr=", thr, "***")
+        
+        G = nx.from_pandas_edgelist(df_filt, 'gene_a', 'gene_b', ['coexp_coefficient'], create_using=nx.Graph())
+
+        with open(gene_list_file) as f:
+            gene_list = [line.rstrip('\n') for line in f]
+
+        # add the genes which don't have any neighbors to the graph
+        n_list = list(G.nodes())
+        G.add_nodes_from(list(set(gene_list) - set(n_list)))
+
+        # save edge list
+        df_g = nx.to_pandas_edgelist(G)
+        df_g.to_csv(graph_fp)
+
+        # degrees
+        degree_info = G.degree(gene_list)
+        with open(degree_fp, 'wb') as f:
+            pkl.dump(degree_info, f)
 
 
 def preprocess_coexp_df(coexp_df, thr, data="coexp_coefficient"):
@@ -323,9 +416,9 @@ def construct_coexp_graph(cancer_type, coexp_dir, output_dir, gene_list_file, pe
 
 def construct_gene_sent(data_path_repository, cancer_list, sent_n):
 
-    n_genesent_dir = os.path.join(data_path_repository["genesent_root"], f"gene_sentence_n{sent_n}")
+    n_genesent_dir = os.path.join(data_path_repository["genesent_root"], f"gene_sentence_n{sent_n}_sc")
 
-    with open(os.path.join(data_path_repository["map"], "geneformer_emb.pkl"), 'rb') as f:
+    with open(os.path.join(data_path_repository["map"], "geneformer_emb_sc.pkl"), 'rb') as f:
         geneformer_emb_map = pkl.load(f)
 
     gsentence_load = LoadGeneSentence(
@@ -339,7 +432,7 @@ def construct_gene_sent(data_path_repository, cancer_list, sent_n):
     create_dir(n_genesent_dir)
     gsentence_load.process(
             max_nodes_sampling=sent_n,
-            thr=0.99,
+            thr=99,
             transform=True,
             filt_by_geneformer=True
         )
@@ -382,7 +475,7 @@ class LoadGeneSentence():
         return data
 
 
-    def process(self, cancer_input=None, max_nodes_sampling=200, thr=0.1, transform=False, filt_by_geneformer=True, random_order=False):
+    def process(self, cancer_input=None, max_nodes_sampling=200, thr=99, transform=False, filt_by_geneformer=True, random_order=False):
 
         # Start from beginning to construct subgraphs
         data_list = []
@@ -588,24 +681,28 @@ if __name__ == "__main__":
 
     data_preprocess.construct_dirs()
 
-    # # preprocess single-cell data (TISCH2 data as an example)
-    # data_preprocess.data_prepare_sc()
+    # preprocess single-cell data (TISCH2 data as an example)
+    data_preprocess.data_prepare_sc()
 
-    # # go to geneformer_preprocess.ipynb to obtain geneformer embeddings
-    # # need to indicate geneformer_emb_dir in the config file
+    data_preprocess.split_sc_data()
+
+    # go to geneformer_preprocess.ipynb to obtain geneformer embeddings
+    # need to indicate geneformer_emb_dir in the config file
 
     # # preprocess and prepare co-expression data
     # data_preprocess.data_prepare_coexp()
 
+    # data_preprocess.data_prepare_geneformer()
+
     # # preprocess and prepare gene sentence data
-    # data_preprocess.data_prepare_genesent(n=200)
+    data_preprocess.data_prepare_genesent(sent_n=200)
 
 
     # ===== add an additional cancer type =====
 
     # data_preprocess.data_prepare_sc(additional=True)
     # data_preprocess.data_prepare_coexp(additional=True)
-    data_preprocess.data_prepare_genesent(n=200, additional=True)
+    # data_preprocess.data_prepare_genesent(sent_n=200, additional=True)
     
     
     

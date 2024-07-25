@@ -1,10 +1,7 @@
 
 EXPERIMENT_DIR: ./experiment
 SAVED_DATA_DIR: ./data/saved_data
-
 sc_dir: /data/xinliu/GeneSentence/TISCH2/
-geneformer_gene_info_path: ../GeneFormer/gene_info_table.csv
-geneformer_emb_dir: ./data/TISCH2/geneformer_emb
 
 SL_data_dir: ./data/SL_data
 
@@ -14,59 +11,10 @@ model_type: transformer
 # task = cancer_specific, mix, or cross_cancer
 task: 
   type: mix
+  # type: mix_all
   cancer: [all]
-
-
-sc_samples:
-  KIRC: KIRC_GSE159115
-  COAD: CRC_EMTAB8107
-  LAML: AML_GSE116256
-  OV: OV_EMTAB8107
-  BRCA: BRCA_GSE148673
-  CESC: CESC_GSE168652
-  SKCM: SKCM_GSE72056
-  LUAD: NSCLC_GSE127465
-
-# add_sc_samples:
-#   Glioma: Glioma_GSE138794
-
 
 SL_dataset:
   general:
     path: ./data/SL_data/raw/SLlabel_general.xlsx
-  paralog_study1_class:
-    path: ./data/SL_data/processed/SLlabel_paralog_study1_class.csv
-    label_type: binary
-  paralog_study1_rank:
-    path: ./data/SL_data/processed/SLlabel_paralog_study1_rank.csv
-    label_type: rank
-  paralog_study2_binary: 
-    path: ./data/SL_data/processed/SLlabel_paralog_study2_binary.csv
-    label_type: binary
-  paralog_study2_score: 
-    path: ./data/SL_data/processed/SLlabel_paralog_study2_score.csv
-    label_type: bi_score
-  paralog_study3: 
-    path: ./data/SL_data/processed/SLlabel_paralog_study3_binary.csv
-    label_type: binary
-  primpartner_study1_binary: 
-    path: ./data/SL_data/processed/SLlabel_primpartner_study1_binary.csv
-    label_type: binary
-  primpartner_study1_fitness_DLD1: 
-    path: ./data/SL_data/processed/SLlabel_primpartner_study1_DLD1.csv
-    label_type: pos_score
-  primpartner_study1_fitness_HCT116: 
-    path: ./data/SL_data/processed/SLlabel_primpartner_study1_HCT116.csv
-    label_type: pos_score
-  primpartner_study2_binary: 
-    path: ./data/SL_data/processed/SLlabel_primpartner_study2_binary.csv
-    label_type: binary
-  primpartner_study2_viability: 
-    path: ./data/SL_data/processed/SLlabel_primpartner_study2_viability.csv
-    label_type: pos_score
-  primpartner_study3_COAD: 
-    path: ./data/SL_data/processed/SLlabel_primpartner_study3_COAD.csv
-    label_type: rank
-  primpartner_study3_OV: 
-    path: ./data/SL_data/processed/SLlabel_primpartner_study3_OV.csv
-    label_type: rank
+

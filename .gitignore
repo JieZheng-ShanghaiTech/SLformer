@@ -1,4 +1,7 @@
 /data
 /result
 /experiment
-/test.ipynb
+/wandb
+/sh
+/preprocess.ipynb
+/SL_downstream.ipynb
