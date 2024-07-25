@@ -148,41 +148,6 @@ def transfer_data_idx(data, gene2id_map, id2cancer_map, label_name='label'):
     return df
 
 
-def load_checkpoint(args, config, cv, transformer_cfg):
-
-    transformer_args = ['n', 'd_model', 'n_head', 'dropout', 'transformer_hidden_dim', 'num_layers',' random_init']
-
-    if 'mix_checkpoint' in config.task:
-        model_dir = config.task.mix_checkpoint.path
-        model_savename = f'model_all_cv{cv}.pth'
-        with open(os.path.join(model_dir, 'params.json'), 'r') as f:
-            model_params = json.load(f)
-        for arg in vars(args):
-            if arg in model_params and arg in transformer_args:
-                setattr(args, arg, model_params[arg])
-        mix_checkpoint=os.path.join(model_dir, "model", model_savename)
-        params_pretrain = torch.load(mix_checkpoint)
-
-        return args, params_pretrain
-
-    elif 'pretrain_checkpoint' in config.task:
-        model_dir = config.task.pretrain_checkpoint.path
-        with open(os.path.join(model_dir, 'params.json'), 'r') as f:
-            model_params = json.load(f)
-        for arg in vars(args):
-            if arg in model_params and arg in transformer_args:
-                setattr(args, arg, model_params[arg])
-        transformer_config = self.config_transformer(args)
-        model = Transformer_Finetuner(config=transformer_config)
-        pretrain_checkpoint = os.path.join(model_dir, "model", "model.pth")
-        params_pretrain = torch.load(pretrain_checkpoint)
-        new_state_dict = model_state_dict
-        filt_state_dict = {k: v for k, v in params_pretrain.items() if 'predictor' not in k}
-        new_state_dict.update(filt_state_dict)
-
-        return args, new_state_dict
-
-
 def clear_result(result_fp):
 
     if os.path.exists(result_fp):
