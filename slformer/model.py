@@ -58,7 +58,8 @@ class Transformer_Finetuner(nn.Module):
             h = self.transformer_encoder(x, src_key_padding_mask=mask)
             # pool = h.mean(dim=0)
             if not self.config['add_att']:
-                h = h[0,:,:]    # [512, 256]
+                # h = h[0,:,:]    # [512, 256]
+                h = h.mean(dim=0)
             h_total.append(h)   
         
         if self.config['add_att']:

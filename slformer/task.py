@@ -9,7 +9,7 @@ import logging
 import wandb
 from datasets import load_from_disk
 
-from util import create_dir, ndcg, ndcg_bin, mean_metrics, average_metrics, clear_result, precision_at_k, recall_at_k, hit_at_k, hit_at_k_bin
+from util import create_dir, calc_pos_weight, ndcg, ndcg_bin, mean_metrics, average_metrics, clear_result, precision_at_k, recall_at_k, hit_at_k, hit_at_k_bin
 from train import train, pretrain
 from model import MLP, Transformer_Finetuner, Transformer_Pretrain
 from dataloader import load_train_data_SL, load_all_data_SL, load_pretrain_data, load_pretrain_data_all
@@ -64,7 +64,7 @@ class Validation_Experiment():
         return transformer_config
 
 
-    def load_pretrain_checkpoint(self, args, config, cv):
+    def load_pretrain_checkpoint(self, args, config, cv, model_savename="model.pth"):
 
         transformer_args = ['n', 'd_model', 'n_head', 'dropout', 'transformer_hidden_dim', 'num_layers',' random_init']
 
@@ -90,7 +90,7 @@ class Validation_Experiment():
                     setattr(args, arg, model_params[arg])
             transformer_config = self.config_transformer(args)
             model = Transformer_Finetuner(config=transformer_config)
-            pretrain_checkpoint = os.path.join(model_dir, "model", "model.pth")
+            pretrain_checkpoint = os.path.join(model_dir, "model", model_savename)
             params_pretrain = torch.load(pretrain_checkpoint)
             new_state_dict = model.state_dict()
             filt_state_dict = {k: v for k, v in params_pretrain.items() if 'predictor' not in k}
@@ -105,10 +105,10 @@ class Validation_Experiment():
 
         random_init = self.args.random_init
 
-        # self.args.output_dim = len(self.gene2id_map)
-        # self.args.output_dim = 9    #num of cancer types
-        gene2anno_map = self.common_data["gene2go_map"]
-        self.args.output_dim = len(set(gene2anno_map.values()))+1
+        self.args.mlp_output_dim = len(self.gene2id_map)
+        # self.args.mlp_output_dim = 9    #num of cancer types
+        # gene2anno_map = self.common_data["gene2go_map"]
+        # self.args.mlp_output_dim = len(set(gene2anno_map.values()))+1
         transformer_config = self.config_transformer(self.args)
 
         # save path of experiment results, models, logs, and params   
@@ -146,13 +146,14 @@ class Validation_Experiment():
         # print("Start pretraining...", f"train data size={len(data_train)}, test data size={len(data_test)}")
         print("Start pretraining...", f"data size={len(filt_data)}")
 
-        model_save_path = os.path.join(model_root_dir, f"model.pth")
+        # model_save_path = os.path.join(model_root_dir, f"model.pth")
         # train_loader, test_loader = load_pretrain_data(data_train, data_test, batch_size=self.args.batch_size, emb_mtx=self.geneformer_emb_mtx, n=self.args.n, gene2anno_map=gene2anno_map, random_init=random_init)
-        data_loader= load_pretrain_data_all(filt_data, batch_size=self.args.batch_size, emb_mtx=self.geneformer_emb_mtx, n=self.args.n, gene2anno_map=gene2anno_map, random_init=random_init)
+        data_loader= load_pretrain_data_all(filt_data, batch_size=self.args.batch_size, emb_mtx=self.geneformer_emb_mtx, n=self.args.n, gene2anno_map=None, random_init=random_init)
+        # data_loader= load_pretrain_data_all(filt_data, batch_size=self.args.batch_size, emb_mtx=self.geneformer_emb_mtx, n=self.args.n, gene2anno_map=gene2anno_map, random_init=random_init)
         model = Transformer_Pretrain(config=transformer_config)
 
         # pretrain(self.args.device, model, criterion, self.args, train_loader, test_loader, model_save_path, result_path, save_model=save_model, save_result=save_result)
-        pretrain(self.args.device, model, criterion, self.args, data_loader, model_save_path, result_path, save_model=save_model, save_result=save_result)
+        pretrain(self.args.device, model, criterion, self.args, data_loader, model_root_dir, result_path, save_model=save_model, save_result=save_result)
 
 
     def run_experiment(self, save_model=False, save_result=True, wandb_track=False):
@@ -215,6 +216,11 @@ class Validation_Experiment():
                     data_test = np.load(os.path.join(self.config.SAVED_DATA_DIR, "SL_train_test_data", self.experiment, f"test_{cancer_type}_fold_{cv}.npy"))
                     data_train = np.load(os.path.join(self.config.SAVED_DATA_DIR, "SL_train_test_data", self.experiment, f"train_{cancer_type}_fold_{cv}.npy"))
 
+                    # pos_weight = calc_pos_weight(data_train)
+                    # pos_weight = torch.tensor([pos_weight]).to(device=torch.device("cuda:" + str(self.args.device)))
+                    # criterion = torch.nn.BCEWithLogitsLoss(pos_weight=pos_weight)
+                    # print("pos/neg weight=", pos_weight)
+
                     print(f"{cancer_type}_cv{cv}, train data size={len(data_train)}, test data size={len(data_test)}")
                     
                     model_save_path = os.path.join(model_root_dir, cancer_type, f"model_{cancer_type}_cv{cv}.pth")
@@ -226,7 +232,10 @@ class Validation_Experiment():
                     elif model_class == 'transformer':
                         train_loader, test_loader = load_train_data_SL(data_test, data_train, self.gene_sent_map, self.args.batch_size, self.args.n, bi_rpr=True, sent_mask=self.sent_mask_map, emb_mtx=self.geneformer_emb_mtx, augmentation=self.args.augmentation)
                         if 'mix_checkpoint' in self.config.task or 'pretrain_checkpoint' in self.config.task:
-                            ckp_args, ckp = self.load_pretrain_checkpoint(self.args, self.config, cv)
+                            if 'pretrain_checkpoint' in self.config.task:
+                                ckp_args, ckp = self.load_pretrain_checkpoint(self.args, self.config, cv, model_savename=self.config.task.pretrain_checkpoint.save_name)
+                            else:
+                                ckp_args, ckp = self.load_pretrain_checkpoint(self.args, self.config, cv)
                             transformer_config = self.config_transformer(ckp_args)
                             model = Transformer_Finetuner(config=transformer_config)
                             model.load_state_dict(ckp, strict=True)

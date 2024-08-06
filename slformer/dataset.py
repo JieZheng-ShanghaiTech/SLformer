@@ -176,17 +176,18 @@ class GeneSentenceDataset(Dataset):
         cancer = torch.tensor(self.dataset[idx]['cancer'])
         root_gene = torch.tensor(self.dataset[idx]['root_gene'])
 
-        # return emb, att_mask, root_gene, cancer
+        return emb, att_mask, root_gene, cancer
         # return emb, att_mask, cancer, root_gene
-        if self.dataset[idx]['root_gene'] in self.gene2anno_map:
-            anno = torch.tensor(self.gene2anno_map[self.dataset[idx]['root_gene']])
-        else:
-            anno = torch.tensor(0)  # unknown
 
-        if not self.random_init:
-            return emb, att_mask, anno, root_gene
-        else:
-            return input_ids, att_mask, anno, root_gene
+        # if self.dataset[idx]['root_gene'] in self.gene2anno_map:
+        #     anno = torch.tensor(self.gene2anno_map[self.dataset[idx]['root_gene']])
+        # else:
+        #     anno = torch.tensor(0)  # unknown
+
+        # if not self.random_init:
+        #     return emb, att_mask, anno, root_gene
+        # else:
+        #     return input_ids, att_mask, anno, root_gene
     
 
 

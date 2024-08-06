@@ -120,7 +120,6 @@ def train(device, model, criterion, m, args, train_loader, model_save_path, resu
             int_out = np.around(out.detach().cpu().numpy(),0).astype(int)
             # int_out = np.argmax(out.detach().cpu(), axis=1)
             
-            # loss = criterion(out, label.to(torch.long).to(device))
             loss = criterion(out, label.to(device))
             # loss = criterion(out, label.to(torch.long).to(device))
             loss = torch.sum(loss)
@@ -459,15 +458,16 @@ def train(device, model, criterion, m, args, train_loader, model_save_path, resu
 #         epoch_start_time = epoch_end_time
 
 
-def pretrain(device, model, criterion, args, data_loader, model_save_path, result_path, save_model=False, save_result=True):
+def pretrain(device, model, criterion, args, data_loader, model_root_dir, result_path, save_model=False, save_result=True):
 
     epoch_start_time = time.time()
 
     best_metric = np.inf
+    # best_metric = 0
     best_epoch = 1
     not_improved_count = 0
     loss_thr = 0.01
-    best_metric_record = {}, {}
+    best_metric_record = {}
 
     optimizer = torch.optim.Adam([
         {'params': model.pos_encoder.parameters(), 'lr': args.transformer_lr, 'betas': (0.9, 0.99), 'eps': args.eps, 'weight_decay': args.weight_decay},
@@ -489,10 +489,9 @@ def pretrain(device, model, criterion, args, data_loader, model_save_path, resul
             "train_loss":0,
         }
 
-
         average_method = "macro"
 
-        pred_train = []
+        # pred_train = []
         pred_int_train = []
         label_train = []
 
@@ -518,7 +517,7 @@ def pretrain(device, model, criterion, args, data_loader, model_save_path, resul
             loss.backward()
             optimizer.step()
 
-            pred_train.append(out.detach().cpu())
+            # pred_train.append(out.detach().cpu())
             pred_int_train.append(torch.tensor(int_out))
             label_train.append(label)
 
@@ -527,7 +526,7 @@ def pretrain(device, model, criterion, args, data_loader, model_save_path, resul
 
         train_record = average_epoch(train_record, len(data_loader))
         
-        pred_train = torch.cat(pred_train, dim=0)
+        # pred_train = torch.cat(pred_train, dim=0)
         pred_int_train = torch.cat(pred_int_train, dim=0)
         label_train = torch.cat(label_train, dim=0)
         with torch.no_grad():
@@ -538,17 +537,21 @@ def pretrain(device, model, criterion, args, data_loader, model_save_path, resul
             train_record["train_recall"] = metrics.recall_score(label_train.to(torch.int), pred_int_train, average=average_method)
             train_record["train_acc"] = metrics.accuracy_score(label_train.to(torch.int), pred_int_train)
 
+            ## save model
+            if epoch % 10 == 0:
+                torch.save(model.state_dict(), os.path.join(model_root_dir, f"model_epoch{epoch}.pth"))
 
             # early stopping   
             epoch_metric = train_record["train_loss"]
-            if best_metric - epoch_metric > loss_thr:
+            if best_metric > epoch_metric:
+            # if best_metric - epoch_metric > loss_thr:
                 best_metric = epoch_metric
                 best_epoch = epoch
                 best_metric_record = train_record
                 not_improved_count = 0
 
-                if save_model:
-                    torch.save(model.state_dict(), model_save_path)
+                # if save_model:
+                #     torch.save(model.state_dict(), model_save_path)
             else:
                 not_improved_count += 1
             
@@ -568,8 +571,8 @@ def pretrain(device, model, criterion, args, data_loader, model_save_path, resul
                         #     [i/len(train_loader) for i in list(best_train_record.values())]+[i/len(test_loader) for i in list(best_test_record.values())]
                         #     )
 
-                if save_model:
-                    logging.info("Best model saved in "+model_save_path)
+                # if save_model:
+                #     logging.info("Best model saved in "+model_save_path)
 
                 break
             

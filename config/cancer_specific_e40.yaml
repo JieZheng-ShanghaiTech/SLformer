@@ -17,8 +17,9 @@ task:
   #   # path: ./experiment/mix/transformer/2024-07-04-20:26:56
   #   path: ./experiment/mix/transformer/2024-07-04-20:27:31
   pretrain_checkpoint:
-    path: ./experiment/pretrain/2024-07-28-22:38:34
-    save_name: model_epoch10.pth
+    # path: ./experiment/pretrain/2024-07-28-22:38:34
+    path: ./experiment/pretrain/2024-08-01-12:29:37
+    save_name: model_epoch40.pth
 
 SL_dataset:
   general:

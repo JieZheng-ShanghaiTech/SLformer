@@ -101,6 +101,15 @@ def get_weighted_sampler(data):
     return sampler
 
 
+def calc_pos_weight(data):
+
+    cnt_1 = np.sum(data[:,2] == 1)
+    cnt_0 = np.sum(data[:,2] == 0)
+
+    pos_weight = cnt_0/cnt_1 if cnt_1 != 0 else 20.0
+    return pos_weight
+
+
 def calc_random_auc(test_loader):
 
     rand_auc = 0
