@@ -3,8 +3,13 @@ import torch.nn as nn
 import torch.nn.functional as F
 from torch.nn.utils.weight_norm import weight_norm
 import math
+import torch.nn.init as init
 from torch_scatter import scatter_mean
+import pickle
 
+with open('/home/tinglu/LLM4SL/geneid2kgemb256_p1.pkl', 'rb') as f:
+    geneid2kgemb = pickle.load(f)
+kg_emb_size = 256 # 128, 768
 
 class Transformer_Finetuner(nn.Module):
 
@@ -34,7 +39,8 @@ class Transformer_Finetuner(nn.Module):
             num_layers=config['num_layers'],
         )
 
-        self.mlp_input_dim = config['d_model']*2
+        self.mlp_input_dim = config['d_model']*2 # kg_sentence=1
+        # self.mlp_input_dim = 1024
 
         if self.config['add_att']:
             # self.cross_att_layer = CrossAttentionBlock(hidden_dim=config['d_model'], num_heads=config['att_nhead'], pooling=False)
@@ -44,10 +50,10 @@ class Transformer_Finetuner(nn.Module):
         # self.predictor = ResNetClassifier(config['d_model']*2)
 
 
-    def forward(self, x1, mask1, x2, mask2):
+    def forward(self, x1, mask1, x2, mask2, g1id=None, g2id=None, device=None):
 
         h_total = []
-
+        # print("x1, x2", x1.shape, x2.shape) # torch.Size([512, 10, 256]) torch.Size([512, 10, 256])
         for x, mask in [(x1, mask1), (x2, mask2)]:
             mask = (1-mask).bool()
             x = x.transpose(0,1)
@@ -59,18 +65,24 @@ class Transformer_Finetuner(nn.Module):
             # pool = h.mean(dim=0)
             if not self.config['add_att']:
                 h = h[0,:,:]    # [512, 256]
-            h_total.append(h)   
+            h_total.append(h) 
+            
         
         if self.config['add_att']:
-            # att11, att22, att12, att21, output_total = self.cross_att_layer(h_total[0].transpose(0,1), h_total[1].transpose(0,1), output_att=True)
+            # print("fusion model ", h_total[0].shape, h_total[1].shape, mask1.shape, mask2.shape) # torch.Size([10, 175, 256]) torch.Size([10, 175, 256]) torch.Size([175, 10]) torch.Size([175, 10])
+            # new torch.Size([10, 184, 384]) torch.Size([10, 184, 384]) torch.Size([184, 10]) torch.Size([184, 10])
+            
             fusion_output = self.fusion_model(h_total[0], h_total[1], mask1, mask2)
+            # fusion_output = self.fusion_model(h_total[0], h_total[1], mask1, mask2, g1id, g2id, device)
+            
+            # print("fusion_output==mlp_input ", fusion_output.shape) # torch.Size([184, 512]) -> new torch.Size([184, 768])
             h_total = fusion_output
         else:
             h_total = torch.cat(h_total, dim=1) # [512, 512]
         # else:
         #     h_total = torch.cat(h_total, dim=-1)
             # h_total = h_total.transpose(0,1).transpose(1,2)
-        
+            
         out = self.predictor(h_total)
 
         return out
@@ -303,9 +315,75 @@ class CrossAttention(nn.Module):
         #     "gene1": protein_output,
         #     "gene2": text_output
         # }
+class CrossAttention_latefusion(nn.Module):
 
+    def __init__(self, hidden_dim=512, num_layers=1, num_heads=8, batch_norm=False, activation="relu"):
+        super(CrossAttention, self).__init__()
+        self.hidden_dim = hidden_dim
+        self.num_layers = num_layers
+        self.num_heads = num_heads
+        self.batch_norm = batch_norm
 
+        self.layers = nn.ModuleList()
+        for _ in range(self.num_layers):
+            self.layers.append(CrossAttentionBlock(hidden_dim, num_heads))
 
+        if batch_norm:
+            self.protein_batch_norm_layers = nn.ModuleList()
+            self.text_batch_norm_layers = nn.ModuleList()
+            for _ in range(self.num_layers):
+                self.protein_batch_norm_layers.append(nn.BatchNorm1d(hidden_dim))
+                self.text_batch_norm_layers.append(nn.BatchNorm1d(hidden_dim))
+
+        if isinstance(activation, str):
+            self.activation = getattr(F, activation)
+        else:
+            self.activation = activation
+
+    def forward(self, protein_input, text_input, mask1, mask2, g1id, g2id, device, all_loss=None, metric=None):
+        # Padding for protein inputs
+        # protein_input, protein_mask = variadic_to_padded(protein_input, graph.num_residues, value=0)
+
+        for i, layer in enumerate(self.layers):
+
+            if i == 0:
+                protein_input = protein_input.transpose(0, 1)
+                text_input = text_input.transpose(0, 1)
+
+            protein_input, text_input = layer(protein_input, text_input, mask1.bool(), mask2.bool())
+            if self.batch_norm:
+                protein_input = self.protein_batch_norm_layers[i](protein_input.transpose(1, 2)).transpose(1, 2)
+                text_input = self.text_batch_norm_layers[i](text_input.transpose(1, 2)).transpose(1, 2)
+            if self.activation:
+                protein_input = self.activation(protein_input)
+                text_input = self.activation(text_input)
+
+        protein_output = scatter_mean(protein_input, mask1, dim=1)[:, 1:,].squeeze(1)
+        text_output = scatter_mean(text_input, mask1, dim=1)[:, 1:,].squeeze(1)
+
+        #####################################################
+        kg_emb1, kg_emb2 = torch.zeros(kg_emb_size).to(device), torch.zeros(kg_emb_size).to(device)
+        # print("crossatten", g1id.shape, protein_output.shape, text_output.shape) # torch.Size([512]) torch.Size([512, 256]) torch.Size([512, 256])
+        # g1id, g2id = g1id.item(), g2id.item()  # Convert tensor to int
+        if g1id in geneid2kgemb:
+            kg_emb1 = torch.tensor(geneid2kgemb[g1id])
+        if g2id in geneid2kgemb:
+            kg_emb2 = torch.tensor(geneid2kgemb[g2id])
+        
+            
+        kg_emb1 = kg_emb1.unsqueeze(0).expand(protein_output.size(0), -1)
+        kg_emb2 = kg_emb2.unsqueeze(0).expand(text_output.size(0), -1)
+
+        #####################################################
+
+        # return torch.cat([protein_output, kg_emb1, text_output, kg_emb2], dim=-1)
+        return torch.cat([protein_output, text_output, kg_emb1, kg_emb2], dim=-1)
+
+        # return torch.cat([protein_output, text_output], dim=-1)
+        
+
+    
+        
 class MLP(nn.Module):
     """MLP with linear output"""
 
@@ -341,7 +419,21 @@ class MLP(nn.Module):
 
         for layer in range(num_layers - 1):
             self.batch_norms.append(nn.BatchNorm1d(hidden_dim))
+        
+        
+    #     # Initialize weights
+    #     self._initialize_weights()
 
+    # def _initialize_weights(self):
+    #     """Initialize the weights of the MLP"""
+    #     for m in self.modules():
+    #         if isinstance(m, nn.Linear):
+    #             init.kaiming_normal_(m.weight, mode='fan_out', nonlinearity='relu')
+    #             if m.bias is not None:
+    #                 init.constant_(m.bias, 0)
+    #         elif isinstance(m, nn.BatchNorm1d):
+    #             init.constant_(m.weight, 1)
+    #             init.constant_(m.bias, 0)
     def forward(self, x):
 
         h = x

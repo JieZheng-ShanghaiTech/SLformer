@@ -25,7 +25,7 @@ class Data_Preprocess():
         config
     ):
         self.config = config
-
+        print(config)
         self.data_path_repository = {
             "sc_raw": os.path.join(self.config.sc_dir, "raw"),
             "sc_processed": os.path.join(self.config.sc_dir, "processed"),
@@ -34,7 +34,8 @@ class Data_Preprocess():
             "coexp_data": os.path.join(self.config.sc_dir, "coexp_data"),
             "coexp_graph": os.path.join(self.config.sc_dir, "coexp_graph"),
             "genesent_root": os.path.join(self.config.sc_dir, "gene_sentence"),
-            "go_anno_df": os.path.join("./data", "GO", "go_anno_popular.csv")
+            # "go_anno_df": os.path.join("./data", "GO", "go_anno_popular.csv")
+            "go_anno_df": os.path.join("/home/jienihu/sc/SLformer/data", "GO", "go_anno_popular.csv")
             # "go_anno_df": os.path.join("./data", "GO", "go_anno_gosemsim.csv")
         }
 
@@ -51,19 +52,27 @@ class Data_Preprocess():
     
 
     def get_common_data(self, sent_n):
-
+        # print(self.data_path_repository, sent_n)
+        # common_data_path = {
+        #     "geneformer_emb_map": os.path.join(self.data_path_repository["map"], "geneformer_emb.pkl"),
+        #     "geneformer_emb_mtx": os.path.join(self.data_path_repository["emb"], "geneformer_emb.npy"),
+        #     "gene2sent_map": os.path.join(self.data_path_repository["map"], f"gene2sent_n{sent_n}.pkl"),
+        #     "sent_mask_map": os.path.join(self.data_path_repository["map"], f"sent_mask_n{sent_n}.pkl"),
+        #     "gene2id_map": os.path.join(self.data_path_repository["map"], "gene2id.pkl"),
+        #     # "cancer_list": os.path.join(self.data_path_repository["map"], "cancer_list.txt"),
+        # }
         common_data_path = {
-            "geneformer_emb_map": os.path.join(self.data_path_repository["map"], "geneformer_emb.pkl"),
-            "geneformer_emb_mtx": os.path.join(self.data_path_repository["emb"], "geneformer_emb.npy"),
-            "gene2sent_map": os.path.join(self.data_path_repository["map"], f"gene2sent_n{sent_n}.pkl"),
-            "sent_mask_map": os.path.join(self.data_path_repository["map"], f"sent_mask_n{sent_n}.pkl"),
-            "gene2id_map": os.path.join(self.data_path_repository["map"], "gene2id.pkl"),
-            # "cancer_list": os.path.join(self.data_path_repository["map"], "cancer_list.txt"),
+            'geneformer_emb_map': '/home/jienihu/sc/SLformer/data/saved_data/map/geneformer_emb.pkl', 
+            'geneformer_emb_mtx': '/home/jienihu/sc/SLformer/data/saved_data/emb/geneformer_emb.npy', 
+            "gene2sent_map": f"/home/jienihu/sc/SLformer/data/saved_data/map/gene2sent_n{sent_n}.pkl",
+            "sent_mask_map": f"/home/jienihu/sc/SLformer/data/saved_data/map/sent_mask_n{sent_n}.pkl",
+            "gene2id_map": "/home/jienihu/sc/SLformer/data/saved_data/map/gene2id.pkl",
         }
-
+        
+        # print(common_data_path)
         for data, path in common_data_path.items():
             if not os.path.exists(path):
-                raise Exception(f"{data} cannot be found, please first construct it.")
+                raise Exception(f"{data,path} cannot be found, please first construct it.")
         
         common_data = {}
         for data in ["geneformer_emb_map","gene2sent_map","sent_mask_map","gene2id_map"]:
