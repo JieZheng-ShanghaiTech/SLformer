@@ -1,9 +1,9 @@
 
 EXPERIMENT_DIR: ./experiment
-SAVED_DATA_DIR: ./data/saved_data
+SAVED_DATA_DIR: /home/jienihu/sc/SLformer/data/saved_data
 sc_dir: /data/xinliu/GeneSentence/TISCH2/
 
-SL_data_dir: ./data/SL_data
+SL_data_dir: /home/jienihu/sc/SLformer/data/SL_data
 
 # model_type = "geneformer" or "transformer"
 model_type: transformer
@@ -16,5 +16,5 @@ task:
 
 SL_dataset:
   general:
-    path: ./data/SL_data/raw/SLlabel_general.xlsx
+    path: /home/jienihu/sc/SLformer/data/SL_data/raw/SLlabel_general.xlsx
 
