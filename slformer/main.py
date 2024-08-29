@@ -26,6 +26,8 @@ parser.add_argument('--n', type=int, default=20,
                     help='genesentence length n')
 parser.add_argument('--augmentation', type=str, default=None,
                     help='whether to augment the gene sentence input')
+parser.add_argument('--anchor', type=int, default=1,
+                    help='whether to include the head anchor gene in a gene sentence')
 
 parser.add_argument('--device', type=int, default=2,
                     help='which gpu to use if any (default: 0)')

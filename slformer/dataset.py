@@ -40,7 +40,7 @@ def get_mask_idx(n, mask_times=1):
 
 class SL_Dataset(Dataset):
 
-    def __init__(self, data, gene_rpr_map, n=None, sent_mask=None, emb_mtx=None, bi_rpr=False, augmentation=None, augment_fold=5):
+    def __init__(self, data, gene_rpr_map, n=None, anchor=True, sent_mask=None, emb_mtx=None, bi_rpr=False, augmentation=None, augment_fold=5):
 
         if augmentation is not None and n is not None:
             data = np.repeat(data, repeats=augment_fold, axis=0)
@@ -50,6 +50,8 @@ class SL_Dataset(Dataset):
         self.data = data
         self.gene_rpr_map = gene_rpr_map
         self.n = n
+        ## anchor: the head gene of a sentence
+        self.sent_start = 0 if anchor else 1
         if n is not None and n > 200:
             raise Exception("Please set a valid gene sentence length (<=200)")
 
@@ -69,21 +71,47 @@ class SL_Dataset(Dataset):
         cancer = data_single[3]
 
         if self.n is not None:  # use gene sentence
-            rpr1 = self.gene_rpr_map[cancer][data_single[0]][:self.n]
-            rpr2 = self.gene_rpr_map[cancer][data_single[1]][:self.n]
-            if self.augmentation is not None and random.uniform(0,1) > 1/self.augment_fold: # otherwise remain unchanged
-                if self.augmentation == "swap":
-                    sent_len1 = self.sent_mask[cancer][data_single[0]][:self.n].count(1)
-                    sent_len2 = self.sent_mask[cancer][data_single[1]][:self.n].count(1)
-                    swap_idx1 = get_swap_idx(sent_len1, swap_times=5)
-                    swap_idx2 = get_swap_idx(sent_len2, swap_times=5)
-                    for l,r in swap_idx1:
-                        rpr1[l], rpr1[r] = rpr1[r], rpr1[l]
-                    for l,r in swap_idx2:
-                        rpr2[l], rpr2[r] = rpr2[r], rpr2[l]
+            if self.sent_mask is not None:
+
+                mask1 = self.sent_mask[cancer][data_single[0]]
+                mask2 = self.sent_mask[cancer][data_single[1]]
+                sent_len1_full = mask1.count(1)
+                sent_len2_full = mask2.count(1)
+                sent_start = self.sent_start if sent_len1_full >= 2 and sent_len2_full >= 2 else 0
+                sent_end = self.n if sent_start==0 else self.n+1
+
+                mask1 = self.sent_mask[cancer][data_single[0]][sent_start:sent_end]
+                mask2 = self.sent_mask[cancer][data_single[1]][sent_start:sent_end]
+
+                sent_len1 = mask1.count(1)
+                sent_len2 = mask2.count(1)
+
+                rpr1 = self.gene_rpr_map[cancer][data_single[0]][sent_start:sent_end]
+                rpr2 = self.gene_rpr_map[cancer][data_single[1]][sent_start:sent_end]
+
+                if self.augmentation is not None and random.uniform(0,1) > 1/self.augment_fold: # otherwise remain unchanged
+                    if self.augmentation == "swap":
+                        swap_idx1 = get_swap_idx(sent_len1, swap_times=5)
+                        swap_idx2 = get_swap_idx(sent_len2, swap_times=5)
+                        for l,r in swap_idx1:
+                            rpr1[l], rpr1[r] = rpr1[r], rpr1[l]
+                        for l,r in swap_idx2:
+                            rpr2[l], rpr2[r] = rpr2[r], rpr2[l]
+                        
+                    if self.augmentation == "mask":
+                        if sent_len1 > 2:
+                            mask_idx1 = get_mask_idx(sent_len1, mask_times=10)
+                            for i in mask_idx1:
+                                mask1[i] = 0
+                        if sent_len2 > 2:
+                            mask_idx2 = get_mask_idx(sent_len2, mask_times=10)
+                            for i in mask_idx2:
+                                mask2[i] = 0    
                 
             rpr1 = torch.tensor(rpr1)
             rpr2 = torch.tensor(rpr2)
+            mask1 = torch.tensor(mask1)
+            mask2 = torch.tensor(mask2)
         else:   # use geneformer embs
             rpr1 = torch.tensor(self.gene_rpr_map[cancer][data_single[0]])
             rpr2 = torch.tensor(self.gene_rpr_map[cancer][data_single[1]])
@@ -95,27 +123,7 @@ class SL_Dataset(Dataset):
             if self.emb_mtx is not None:
                 rpr1 = F.embedding(rpr1, self.emb_mtx).to(torch.float32)
                 rpr2 = F.embedding(rpr2, self.emb_mtx).to(torch.float32)
-
-            if self.sent_mask is not None:
-                mask1 = self.sent_mask[cancer][data_single[0]][:self.n]
-                mask2 = self.sent_mask[cancer][data_single[1]][:self.n]
-
-                if self.augmentation is not None and random.uniform(0,1) > 1/self.augment_fold: # otherwise remain unchanged
-                    if self.augmentation == "mask":
-                        sent_len1 = mask1.count(1)
-                        sent_len2 = mask2.count(1)
-                        
-                        if sent_len1 > 2:
-                            mask_idx1 = get_mask_idx(sent_len1, mask_times=5)
-                            for i in mask_idx1:
-                                mask1[i] = 0
-                        if sent_len2 > 2:
-                            mask_idx2 = get_mask_idx(sent_len2, mask_times=5)
-                            for i in mask_idx2:
-                                mask2[i] = 0
                 
-                mask1 = torch.tensor(mask1)
-                mask2 = torch.tensor(mask2)
                 return rpr1, mask1, rpr2, mask2, label, data_single[0], data_single[1], cancer
             else:
                 return rpr1, rpr2, label, data_single[0], data_single[1], cancer

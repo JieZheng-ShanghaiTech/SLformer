@@ -34,20 +34,20 @@ def prepare_SL_data(config, cancer, common_data, type="general"):
     return data_total
 
 
-def load_all_data_SL(all_data, gene_rpr_map, batch_size, n=None, bi_rpr=False, sent_mask=None, emb_mtx=None, augmentation=None):
+def load_all_data_SL(all_data, gene_rpr_map, batch_size, n=None, anchor=True, bi_rpr=False, sent_mask=None, emb_mtx=None, augmentation=None):
 
-    loader = DataLoader(SL_Dataset(all_data, gene_rpr_map, n=n, bi_rpr=bi_rpr, sent_mask=sent_mask, emb_mtx=emb_mtx, augmentation=augmentation), batch_size=batch_size, shuffle=False)
+    loader = DataLoader(SL_Dataset(all_data, gene_rpr_map, n=n, anchor=anchor, bi_rpr=bi_rpr, sent_mask=sent_mask, emb_mtx=emb_mtx, augmentation=augmentation), batch_size=batch_size, shuffle=False)
     
     return loader
 
 
-def load_train_data_SL(test_data, train_data, gene_rpr_map, batch_size, n=None, bi_rpr=False, sent_mask=None, emb_mtx=None, augmentation=None):
+def load_train_data_SL(test_data, train_data, gene_rpr_map, batch_size, n=None, anchor=True, bi_rpr=False, sent_mask=None, emb_mtx=None, augmentation=None):
 
     # sampler_test = get_weighted_sampler(test_data)
     # sampler_train = get_weighted_sampler(train_data)
 
-    train_dataset = SL_Dataset(train_data, gene_rpr_map, n=n, bi_rpr=bi_rpr, sent_mask=sent_mask, emb_mtx=emb_mtx, augmentation=augmentation)
-    test_dataset = SL_Dataset(test_data, gene_rpr_map, n=n, bi_rpr=bi_rpr, sent_mask=sent_mask, emb_mtx=emb_mtx, augmentation=None)
+    train_dataset = SL_Dataset(train_data, gene_rpr_map, n=n, anchor=anchor, bi_rpr=bi_rpr, sent_mask=sent_mask, emb_mtx=emb_mtx, augmentation=augmentation)
+    test_dataset = SL_Dataset(test_data, gene_rpr_map, n=n, anchor=anchor, bi_rpr=bi_rpr, sent_mask=sent_mask, emb_mtx=emb_mtx, augmentation=None)
 
     drop_last = {"train":False, "test":False}
     for type, dataset in {"train":train_dataset, "test":test_dataset}.items():
