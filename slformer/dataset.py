@@ -4,8 +4,12 @@ import random
 
 from torch.utils.data import Dataset
 import torch.nn.functional as F
+import pickle
 
-
+with open('/home/tinglu/LLM4SL/geneid2kgemb256_p1.pkl', 'rb') as f:
+    geneid2kgemb = pickle.load(f)
+kg_emb_size = 256 # 128, 768
+kg_sentence = 1
 
 def get_swap_idx(n, swap_times=1):
 
@@ -81,7 +85,8 @@ class SL_Dataset(Dataset):
                         rpr1[l], rpr1[r] = rpr1[r], rpr1[l]
                     for l,r in swap_idx2:
                         rpr2[l], rpr2[r] = rpr2[r], rpr2[l]
-                
+            # print("gene sentence1", rpr1)
+            # print("gene sentence2", rpr2)
             rpr1 = torch.tensor(rpr1)
             rpr2 = torch.tensor(rpr2)
         else:   # use geneformer embs
@@ -89,7 +94,35 @@ class SL_Dataset(Dataset):
             rpr2 = torch.tensor(self.gene_rpr_map[cancer][data_single[1]])
         
         label = torch.tensor(data_single[2])    # SL label
+        
+        #####################################################
+        if kg_sentence:
+                
+            # KG embedding mapping for rpr1 and rpr2
+            kg_emb1 = []
+            kg_emb2 = []
 
+            for gene_id in rpr1:
+                gene_id = gene_id.item()  # Convert tensor to int
+                if gene_id in geneid2kgemb:
+                    kg_emb1.append(torch.tensor(geneid2kgemb[gene_id]))
+                else:
+                    # print(f"Missing KG embedding for gene ID: {gene_id}")
+                    kg_emb1.append(torch.zeros(kg_emb_size))  # Placeholder for missing embeddings
+
+            for gene_id in rpr2:
+                gene_id = gene_id.item()  # Convert tensor to int
+                if gene_id in geneid2kgemb:
+                    kg_emb2.append(torch.tensor(geneid2kgemb[gene_id]))
+                else:
+                    # print(f"Missing KG embedding for gene ID: {gene_id}")
+                    kg_emb2.append(torch.zeros(kg_emb_size))  # Placeholder for missing embeddings
+
+            # Convert to tensors
+            kg1 = torch.stack(kg_emb1)
+            kg2 = torch.stack(kg_emb2)
+        #####################################################
+        
         if self.bi_rpr:
             # map sentence to embeddings
             if self.emb_mtx is not None:
@@ -116,6 +149,19 @@ class SL_Dataset(Dataset):
                 
                 mask1 = torch.tensor(mask1)
                 mask2 = torch.tensor(mask2)
+                
+                #####################################################
+                if kg_sentence:
+                    # Concatenate the original embeddings with the KG embeddings
+                    rpr1 = torch.cat((rpr1, kg1), dim=-1)  # [10, 256 + 128]
+                    rpr2 = torch.cat((rpr2, kg2), dim=-1)  # [10, 256 + 128]
+                    
+                    # rpr1 = kg1  
+                    # rpr2 = kg2  
+                    
+                #####################################################
+                # print("return", rpr1.shape, mask1.shape, kg1.shape) # torch.Size([10, 256]) torch.Size([10]) torch.Size([10, 128])
+                # print("dataset", data_single[0], data_single[0].dtype) # 5748 int64
                 return rpr1, mask1, rpr2, mask2, label, data_single[0], data_single[1], cancer
             else:
                 return rpr1, rpr2, label, data_single[0], data_single[1], cancer
@@ -171,23 +217,22 @@ class GeneSentenceDataset(Dataset):
 
         input_ids = torch.tensor(self.dataset[idx]['input_ids'][1:self.n])  #remove root gene
         # emb = F.embedding(input_ids, self.emb_mtx).to(torch.float32)
-        emb = F.embedding(input_ids, self.emb_mtx).to(torch.float32)
+        emb = F.embedding(input_ids, self.emb_mtx).to(torch.float32) ## input_ids: gene id
         att_mask = torch.tensor(self.dataset[idx]['attention_mask'][1:self.n])
         cancer = torch.tensor(self.dataset[idx]['cancer'])
         root_gene = torch.tensor(self.dataset[idx]['root_gene'])
 
-        return emb, att_mask, root_gene, cancer
+        # return emb, att_mask, root_gene, cancer
         # return emb, att_mask, cancer, root_gene
+        if self.dataset[idx]['root_gene'] in self.gene2anno_map:
+            anno = torch.tensor(self.gene2anno_map[self.dataset[idx]['root_gene']])
+        else:
+            anno = torch.tensor(0)  # unknown
 
-        # if self.dataset[idx]['root_gene'] in self.gene2anno_map:
-        #     anno = torch.tensor(self.gene2anno_map[self.dataset[idx]['root_gene']])
-        # else:
-        #     anno = torch.tensor(0)  # unknown
-
-        # if not self.random_init:
-        #     return emb, att_mask, anno, root_gene
-        # else:
-        #     return input_ids, att_mask, anno, root_gene
+        if not self.random_init:
+            return emb, att_mask, anno, root_gene
+        else:
+            return input_ids, att_mask, anno, root_gene
     
 
 

@@ -101,15 +101,6 @@ def get_weighted_sampler(data):
     return sampler
 
 
-def calc_pos_weight(data):
-
-    cnt_1 = np.sum(data[:,2] == 1)
-    cnt_0 = np.sum(data[:,2] == 0)
-
-    pos_weight = cnt_0/cnt_1 if cnt_1 != 0 else 20.0
-    return pos_weight
-
-
 def calc_random_auc(test_loader):
 
     rand_auc = 0
@@ -250,3 +241,34 @@ def ndcg_bin(k, predict_list, true_list):
     ndcg_topk = 0 if dcg_topk == 0 or idcg_topk == 0 else dcg_topk / idcg_topk
 
     return ndcg_topk, hit_topk
+
+
+def stat_indep_test(task="cancer_specific"):
+
+    eval_cv_dir = "experiment/independent_test/eval_cv"
+    if task == "cancer_specific":
+        task_dir = {
+            "cancer_specific": ["COAD", "LAML", "LUAD"],
+        }
+    elif task == "mix":
+        task_dir = {
+            "mix": ["mix"]
+        }
+    models = ["geneformer", "transformer"]
+    metrics = ["ndcg@10","ndcg@20","ndcg@30","ndcg@50","ndcg@100"]
+
+    models_perform = {m:[] for m in models}
+
+    for task, dirs in task_dir.items():
+        for dir in dirs:
+            for f in os.listdir(os.path.join(eval_cv_dir, dir)):
+                for model in models:
+                    if model in f and "binary" not in f:
+                        df = pd.read_csv(os.path.join(eval_cv_dir, dir, f))
+                        
+                        for i in range(len(df)):
+                            for m in metrics:
+                                models_perform[model].append(df.iloc[i][m])
+                            
+    perform_diff = np.sum(models_perform['transformer']) - np.sum(models_perform['geneformer'])
+    return perform_diff

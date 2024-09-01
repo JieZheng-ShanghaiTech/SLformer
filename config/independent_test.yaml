@@ -10,20 +10,19 @@ task:
   model:
     mix:
       model_type: transformer
-      # path: ./experiment/mix/transformer/2024-07-05-15:24:53
-      path: ./experiment/mix/transformer/2024-07-05-16:19:50
+      path: ./experiment/mix/transformer/2024-08-30-16:04:01
     LAML:
       model_type: transformer
-      path: ./experiment/cancer_specific/transformer/2024-07-05-15:26:12
+      path: ./experiment/cancer_specific/transformer/2024-08-30-12:56:53
     LUAD:
       model_type: transformer
-      path: ./experiment/cancer_specific/transformer/2024-07-05-15:26:12
+      path: ./experiment/cancer_specific/transformer/2024-08-30-12:56:53
     COAD:
       model_type: transformer
-      path: ./experiment/cancer_specific/transformer/2024-07-05-15:26:12
+      path: ./experiment/cancer_specific/transformer/2024-08-30-12:56:53
     SKCM:
       model_type: transformer
-      path: ./experiment/cancer_specific/transformer/2024-07-05-15:26:12
+      path: ./experiment/cancer_specific/transformer/2024-08-30-12:56:53
 
     # mix:
     #   model_type: geneformer
