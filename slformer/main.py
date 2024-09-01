@@ -89,6 +89,22 @@ with open(args.data_config_file, 'r') as f:
 with open(args.config_file, 'r') as f:
     config = easydict.EasyDict(yaml.safe_load(f))
 
+#################################################
+# Override args with parameters from the config file only for cancer-specific tasks
+if config.task.type == "cancer_specific":
+    for key, value in config.params.items():
+        # Convert specific parameters to the correct types
+        if key in ['dropout', 'eps', 'weight_decay', 'transformer_lr', 'predictor_lr']:
+            setattr(args, key, float(value))
+        elif key in ['batch_size', 'n_head', 'num_layers', 'n', 'early_stop', 'lr_patience', 'device']:
+            setattr(args, key, int(value))
+        else:
+            setattr(args, key, value)
+# if you pass a parameter via the command line, it will take precedence over the YAML file 
+# command-line arguments have the highest priority
+#################################################
+
+
 if "pretrain" in args.config_file:
     from preprocess_sc import Data_Preprocess
 else:

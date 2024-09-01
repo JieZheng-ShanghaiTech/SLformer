@@ -233,7 +233,7 @@ class Validation_Experiment():
                             model.load_state_dict(ckp, strict=True)
                         else:
                             transformer_config = self.config_transformer(self.args)
-                            model = Transformer_Finetuner(config=transformer_config)
+                            model = Transformer_Finetuner(config=transformer_config) # config=self.transformer_config
 
                     train(self.args.device, model, criterion, m, self.args, train_loader, model_save_path, result_path, test_loader, save_model=save_model, save_result=save_result, model_class=model_class, wandb_run=run)
 
@@ -336,7 +336,7 @@ class Validation_Experiment():
                         model.load_state_dict(ckp, strict=True)
                     else:
                         transformer_config = self.config_transformer(self.args)
-                        model = Transformer_Finetuner(config=transformer_config) # config=self.transformer_config
+                        model = Transformer_Finetuner(config=transformer_config)
 
                 train(self.args.device, model, criterion, m, self.args, train_loader, model_save_path, result_path, test_loader, save_model=save_model, save_result=save_result, model_class=model_class, wandb_run=run)
 
