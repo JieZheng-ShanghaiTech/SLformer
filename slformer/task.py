@@ -142,12 +142,12 @@ class Validation_Experiment():
 
         gsent_data = load_from_disk("/data/xinliu/GeneSentence/TISCH2/gene_sentence/gene_sentence_n200_sc")
         filt_data = gsent_data.filter(lambda s: s['length'] >= 2)
-        # dataset_split = filt_data.train_test_split(test_size=0.2, seed=1)
-        # data_train = dataset_split["train"]
-        # data_test = dataset_split["test"]
+        dataset_split = filt_data.train_test_split(test_size=0.1, seed=1)
+        data_train = dataset_split["train"]
+        data_test = dataset_split["test"]
 
-        # print("Start pretraining...", f"train data size={len(data_train)}, test data size={len(data_test)}")
-        print("Start pretraining...", f"data size={len(filt_data)}")
+        print("Start pretraining...", f"train data size={len(data_train)}, test data size={len(data_test)}")
+        # print("Start pretraining...", f"data size={len(filt_data)}")
 
         model_save_path = os.path.join(model_root_dir, f"model.pth")
         # train_loader, test_loader = load_pretrain_data(data_train, data_test, batch_size=self.args.batch_size, emb_mtx=self.geneformer_emb_mtx, n=self.args.n, gene2anno_map=gene2anno_map, random_init=random_init)
@@ -227,7 +227,7 @@ class Validation_Experiment():
                         train_loader, test_loader = load_train_data_SL(data_test, data_train, self.geneformer_emb_map, self.args.batch_size)
                         model = MLP(num_layers=2, input_dim=self.args.mlp_input_dim, hidden_dim=self.args.mlp_hidden_dim, output_dim=self.args.mlp_output_dim)
                     elif model_class == 'transformer':
-                        train_loader, test_loader = load_train_data_SL(data_test, data_train, self.gene_sent_map, self.args.batch_size, self.args.n, bi_rpr=True, sent_mask=self.sent_mask_map, emb_mtx=self.geneformer_emb_mtx, augmentation=self.args.augmentation)
+                        train_loader, test_loader = load_train_data_SL(data_test, data_train, self.gene_sent_map, self.args.batch_size, self.args.n, self.args.anchor, bi_rpr=True, sent_mask=self.sent_mask_map, emb_mtx=self.geneformer_emb_mtx, augmentation=self.args.augmentation)
                         if 'mix_checkpoint' in self.config.task or 'pretrain_checkpoint' in self.config.task:
                             ckp_args, ckp = self.load_pretrain_checkpoint(self.args, self.config, cv)
                             transformer_config = self.config_transformer(ckp_args)
@@ -279,7 +279,7 @@ class Validation_Experiment():
                         train_loader, test_loader = load_train_data_SL(data_test, data_train, self.geneformer_emb_map, self.args.batch_size)
                         model = MLP(num_layers=2, input_dim=self.args.mlp_input_dim, hidden_dim=self.args.mlp_hidden_dim, output_dim=self.args.mlp_output_dim)
                     elif model_class == 'transformer':
-                        train_loader, test_loader = load_train_data_SL(data_test, data_train, self.gene_sent_map, self.args.batch_size, self.args.n, bi_rpr=True, sent_mask=self.sent_mask_map, emb_mtx=self.geneformer_emb_mtx, augmentation=self.args.augmentation)
+                        train_loader, test_loader = load_train_data_SL(data_test, data_train, self.gene_sent_map, self.args.batch_size, self.args.n, self.args.anchor, bi_rpr=True, sent_mask=self.sent_mask_map, emb_mtx=self.geneformer_emb_mtx, augmentation=self.args.augmentation)
                         if 'pretrain_checkpoint' in self.config.task:
                             ckp_args, ckp = self.load_pretrain_checkpoint(self.args, self.config, cv)
                             transformer_config = self.config_transformer(ckp_args)
@@ -329,7 +329,7 @@ class Validation_Experiment():
                     train_loader, test_loader = load_train_data_SL(data_test, data_train, self.geneformer_emb_map, self.args.batch_size)
                     model = MLP(num_layers=2, input_dim=self.args.mlp_input_dim, hidden_dim=self.args.mlp_hidden_dim, output_dim=self.args.mlp_output_dim)
                 elif model_class == 'transformer':
-                    train_loader, test_loader = load_train_data_SL(data_test, data_train, self.gene_sent_map, self.args.batch_size, self.args.n, bi_rpr=True, sent_mask=self.sent_mask_map, emb_mtx=self.geneformer_emb_mtx, augmentation=self.args.augmentation)
+                    train_loader, test_loader = load_train_data_SL(data_test, data_train, self.gene_sent_map, self.args.batch_size, self.args.n, self.args.anchor, bi_rpr=True, sent_mask=self.sent_mask_map, emb_mtx=self.geneformer_emb_mtx, augmentation=self.args.augmentation)
                     if 'pretrain_checkpoint' in self.config.task:
                         origin_model = Transformer_Finetuner(config=self.transformer_config)
                         ckp_args, ckp = self.load_pretrain_checkpoint(self.args, self.config, cv)
