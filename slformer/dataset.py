@@ -6,7 +6,7 @@ from torch.utils.data import Dataset
 import torch.nn.functional as F
 import pickle
 
-with open('/home/tinglu/LLM4SL/geneid2kgemb256_p1.pkl', 'rb') as f:
+with open('/home/tinglu/LLM4SL/KG/slformer-gene2kgemb/geneid2kgemb256_p1.pkl', 'rb') as f:
     geneid2kgemb = pickle.load(f)
 kg_emb_size = 256 # 128, 768
 kg_sentence = 1

@@ -2,6 +2,7 @@ import numpy as np
 from sklearn.metrics import ndcg_score
 import pandas as pd
 import os
+import pickle as pkl
 import torch
 import time
 import json
@@ -52,11 +53,12 @@ class Validation_Experiment():
             "dropout": args.dropout,
             "vocab_size": len(self.gene2id_map),
             "transformer_hidden_dim": args.transformer_hidden_dim,
-            "num_layers": args.num_layers,
+            "transformer_num_layers": args.transformer_num_layers,
             "mlp_hidden_dim": args.mlp_hidden_dim,
             "mlp_output_dim": args.mlp_output_dim,
             "add_att": args.add_att,
             "att_nhead": args.att_nhead,
+            "att_num_layers": args.att_num_layers,
             "random_init": args.random_init,
             
             # "freeze_transformer_encoder": False,
@@ -67,7 +69,7 @@ class Validation_Experiment():
 
     def load_pretrain_checkpoint(self, args, config, cv):
 
-        transformer_args = ['n', 'd_model', 'n_head', 'dropout', 'transformer_hidden_dim', 'num_layers',' random_init']
+        transformer_args = ['n', 'd_model', 'n_head', 'dropout', 'transformer_hidden_dim', 'transformer_num_layers',' random_init']
 
         if 'mix_checkpoint' in config.task:
             model_dir = config.task.mix_checkpoint.path
@@ -443,6 +445,131 @@ class Validation_Experiment():
             print("perform_diff_mix=", perform_diff_mix)
 
 
+    def independent_test_on_mix(self):
+
+        self.experiment = "independent_test_on_mix"
+
+        test_datasets = self.config.SL_dataset
+        model_dirs = self.config.task.model
+
+        for data_type in list(test_datasets.keys()):
+            if data_type != "general" and test_datasets[data_type]["context"]=="mix":
+
+                context_all = test_datasets[data_type]["context_all"]
+                
+                ## cancer-specific
+                df_cancer_specific = []
+                for context in context_all:
+
+                    model_cfg = model_dirs[context]
+
+                    ## set model parameters
+                    with open(os.path.join(model_cfg.path, 'params.json'), 'r') as f:
+                        model_params = json.load(f)
+                    for arg in vars(self.args):
+                        if arg in model_params:
+                            setattr(self.args, arg, model_params[arg])
+
+                    transformer_config = self.config_transformer(self.args)
+
+                    data = np.load(os.path.join(self.config.SAVED_DATA_DIR, "independent_test_data", f"{data_type}.npy"))
+                    ## filt context-specific data
+                    context_id = self.cancer2id_map[context]
+                    data_context = data[data[:, 3] == context_id]
+
+                    if model_cfg.model_type == 'geneformer':
+                        loader = load_all_data_SL(data_context, self.geneformer_emb_map, self.args.batch_size)
+                    elif model_cfg.model_type == 'transformer':
+                        loader = load_all_data_SL(data_context, self.gene_sent_map, self.args.batch_size, self.args.n, bi_rpr=True, sent_mask=self.sent_mask_map, emb_mtx=self.geneformer_emb_mtx)
+
+                    model_dir = os.path.join(model_cfg.path, "model", context)
+
+                    df_all = []
+                    for i, model_savepath in enumerate(os.listdir(model_dir)):
+                
+                        if model_cfg.model_type == 'geneformer':
+                            model = MLP(num_layers=2, input_dim=self.args.mlp_input_dim, hidden_dim=self.args.mlp_hidden_dim, output_dim=self.args.mlp_output_dim)
+                        elif model_cfg.model_type == 'transformer':
+                            model = Transformer_Finetuner(config=transformer_config)
+                        
+                        predict_res, true_label, cancer, primary_gene, partner_gene = SL_test_prim_partner(device=self.args.device, model=model,
+                            pretrain_file=os.path.join(model_dir, model_savepath),
+                            data_loader=loader,
+                            gene2id_map=self.gene2id_map,
+                            cancer2id_map=self.cancer2id_map
+                        )
+                        pred_result = pd.DataFrame(data=np.concatenate((np.array(primary_gene).reshape(-1,1),
+                                                                    np.array(partner_gene).reshape(-1,1),
+                                                                    np.array(cancer).reshape(-1,1),
+                                                                    predict_res.reshape(-1,1),
+                                                                    true_label.reshape(-1,1)), axis=1),
+                                                                    columns = ["gene1","gene2","cancer","predict","true"])
+                        pred_result = pred_result.astype({"gene1":'str',"gene2":'str',"cancer":'str',"predict":'float32',"true":'float32'})
+                        
+                        rank_pred_result = pred_result
+                        rank_pred_result['predict'] = pred_result['predict'].rank(method='min', ascending=True)
+                        df_all.append(rank_pred_result)
+                    
+                    df_all = pd.concat(df_all)
+                    df_cancer_specific.append(df_all.groupby(['gene1', 'gene2', 'cancer', 'true'], as_index=False)['predict'].mean())
+
+                df_cancer_specific = pd.concat(df_cancer_specific)
+
+                ## mix
+                context = "mix"
+                model_cfg = model_dirs[context]
+
+                ## set model parameters
+                with open(os.path.join(model_cfg.path, 'params.json'), 'r') as f:
+                    model_params = json.load(f)
+                for arg in vars(self.args):
+                    if arg in model_params:
+                        setattr(self.args, arg, model_params[arg])
+
+                transformer_config = self.config_transformer(self.args)
+
+                data = np.load(os.path.join(self.config.SAVED_DATA_DIR, "independent_test_data", f"{data_type}.npy"))
+
+                if model_cfg.model_type == 'geneformer':
+                    loader = load_all_data_SL(data, self.geneformer_emb_map, self.args.batch_size)
+                elif model_cfg.model_type == 'transformer':
+                    loader = load_all_data_SL(data, self.gene_sent_map, self.args.batch_size, self.args.n, bi_rpr=True, sent_mask=self.sent_mask_map, emb_mtx=self.geneformer_emb_mtx)
+
+                model_dir = model_dir = os.path.join(model_cfg.path, "model")
+                
+                df_all = []
+                for i, model_savepath in enumerate(os.listdir(model_dir)):
+            
+                    if model_cfg.model_type == 'geneformer':
+                        model = MLP(num_layers=2, input_dim=self.args.mlp_input_dim, hidden_dim=self.args.mlp_hidden_dim, output_dim=self.args.mlp_output_dim)
+                    elif model_cfg.model_type == 'transformer':
+                        model = Transformer_Finetuner(config=transformer_config)
+                    
+                    predict_res, true_label, cancer, primary_gene, partner_gene = SL_test_prim_partner(device=self.args.device, model=model,
+                        pretrain_file=os.path.join(model_dir, model_savepath),
+                        data_loader=loader,
+                        gene2id_map=self.gene2id_map,
+                        cancer2id_map=self.cancer2id_map
+                    )
+                    pred_result = pd.DataFrame(data=np.concatenate((np.array(primary_gene).reshape(-1,1),
+                                                                np.array(partner_gene).reshape(-1,1),
+                                                                np.array(cancer).reshape(-1,1),
+                                                                predict_res.reshape(-1,1),
+                                                                true_label.reshape(-1,1)), axis=1),
+                                                                columns = ["gene1","gene2","cancer","predict","true"])
+                    pred_result = pred_result.astype({"gene1":'str',"gene2":'str',"cancer":'str',"predict":'float32',"true":'float32'})
+                    df_all.append(pred_result)
+
+                df_all = pd.concat(df_all)
+                df_mix = df_all.groupby(['gene1', 'gene2', 'cancer', 'true'], as_index=False)['predict'].mean()
+
+                ## calculate exact matching counts
+                exact_matching_cancer_specific = independent_exact_matching(df_cancer_specific)
+                exact_matching_mix = independent_exact_matching(df_mix)
+                print(data_type, "cancer-specific:", exact_matching_cancer_specific, "mix:",exact_matching_mix)
+
+
+
     def infer_primpartner(self):
 
         if self.experiment != "inference":
@@ -477,6 +604,8 @@ class Validation_Experiment():
                     loader = load_all_data_SL(data, self.gene_sent_map, self.args.batch_size, self.args.n, bi_rpr=True, sent_mask=self.sent_mask_map, emb_mtx=self.geneformer_emb_mtx)
                 
                 df_all = []
+                att_cross_all = []
+                att_transformer_all = []
                 for model_savename in os.listdir(os.path.join(model_cfg.path, "model")):
 
                     if model_cfg.model_type == 'geneformer':
@@ -484,11 +613,12 @@ class Validation_Experiment():
                     elif model_cfg.model_type == 'transformer':
                         model = Transformer_Finetuner(config=transformer_config)
                     
-                    predict_res, _, _, primary_gene, partner_gene = SL_test_prim_partner(device=self.args.device, model=model,
+                    predict_res, _, att_cross, att_transformer, _, primary_gene, partner_gene = SL_test_prim_partner(device=self.args.device, model=model,
                         pretrain_file=os.path.join(model_cfg.path, "model", model_savename),
                         data_loader=loader,
                         gene2id_map=self.gene2id_map,
-                        cancer2id_map=self.cancer2id_map
+                        cancer2id_map=self.cancer2id_map,
+                        output_att=True
                     )
 
                     result_df = pd.DataFrame(data=predict_res.reshape(-1,1), columns=["score"])
@@ -497,17 +627,29 @@ class Validation_Experiment():
                     result_df = result_df.sort_values(by=["score"],ascending=False).reset_index()
                     print(data_name, scenario, result_df[result_df['partner_gene']=='PRKDC'].index[0], '/', str(len(result_df)))
                     df_all.append(result_df)
+                    att_cross_all.append(att_cross)
+                    att_transformer_all.append(att_transformer)
 
                 df_concat = pd.concat(df_all)
-                avg_score = df_concat.groupby('partner_gene')['score'].mean().reset_index()
-                avg_score = avg_score.sort_values(by=["score"],ascending=False).reset_index()
-                avg_score.to_csv(os.path.join(output_dir, f"{scenario}_{data_name}.csv"), index=False)
-                print("avg", data_name, scenario, avg_score[avg_score['partner_gene']=='PRKDC'].index[0], '/', str(len(avg_score)))
+                avg_score_mean = df_concat.groupby('partner_gene')['score'].mean().reset_index()
+                avg_score_mean = avg_score_mean.sort_values(by=["score"],ascending=False).reset_index()
+                avg_score_mean.to_csv(os.path.join(output_dir, f"{scenario}_{data_name}.csv"), index=False)
+                print("avg", data_name, scenario, avg_score_mean[avg_score_mean['partner_gene']=='PRKDC'].index[0], '/', str(len(avg_score_mean)))
+
+                # avg_score_median = df_concat.groupby('partner_gene')['score'].median().reset_index()
+                # avg_score_median = avg_score_median.sort_values(by=["score"],ascending=False).reset_index()
+                # print("median", data_name, scenario, avg_score_median[avg_score_median['partner_gene']=='PRKDC'].index[0], '/', str(len(avg_score_median)))
+
                 print("==========================")
+                # att_mean = np.mean(att_all, axis=0)
+                with open(os.path.join(output_dir, f"{scenario}_{data_name}_crossatt.pkl"), 'wb') as f:
+                    pkl.dump(att_cross_all, f)
+                with open(os.path.join(output_dir, f"{scenario}_{data_name}_transformeratt.pkl"), 'wb') as f:
+                    pkl.dump(att_transformer_all, f)
 
 
 
-def SL_test_prim_partner(device, model, pretrain_file, data_loader, gene2id_map, cancer2id_map):
+def SL_test_prim_partner(device, model, pretrain_file, data_loader, gene2id_map, cancer2id_map, output_att=False):
 
     id2gene_map = {i:g for g,i in gene2id_map.items()}
     id2cancer_map = {i:c for c,i in cancer2id_map.items()}
@@ -524,12 +666,14 @@ def SL_test_prim_partner(device, model, pretrain_file, data_loader, gene2id_map,
     context = []
     partner_gene_name = []
     primary_gene_name = []
+    att_cross = [[],[],[],[]]
+    att_transformer = [[],[]]
 
     for i, data in enumerate(data_loader):
 
         if len(data)==5:
             total_emb, label, g1, g2, cancer = data
-            total_emb_cuda = torch.autograd.Variable(total_emb.to(device)).to(torch.float32)
+            total_emb_cuda = total_emb.to(device).to(torch.float32)
             res = model(total_emb_cuda)
         elif len(data)==8:
             sent1, mask1, sent2, mask2, label, g1, g2, cancer = data
@@ -537,7 +681,14 @@ def SL_test_prim_partner(device, model, pretrain_file, data_loader, gene2id_map,
             sent2_cuda = sent2.to(device)
             mask1_cuda = mask1.to(device)
             mask2_cuda = mask2.to(device)
-            res = model(sent1_cuda, mask1_cuda, sent2_cuda, mask2_cuda)
+            if not output_att:
+                res = model(sent1_cuda, mask1_cuda, sent2_cuda, mask2_cuda, output_att)
+            else:
+                res, cross_att_all, transformer_att_all = model(sent1_cuda, mask1_cuda, sent2_cuda, mask2_cuda, output_att=True)
+                for j, att_part in enumerate(cross_att_all):
+                    att_cross[j].append(att_part.detach().cpu())
+                for j, att_part in enumerate(transformer_att_all):
+                    att_transformer[j].append(att_part.detach().cpu())
 
         m = torch.nn.Sigmoid()
         res = torch.squeeze(m(res))
@@ -552,8 +703,18 @@ def SL_test_prim_partner(device, model, pretrain_file, data_loader, gene2id_map,
         
     predict_res = torch.cat(predict_res, dim=0)
     true_label = torch.cat(true_label, dim=0)
+    if output_att:
+        att_cross_out = []
+        att_transformer_out = []
+        for att_part in att_cross:
+            att_cross_out.append(torch.cat(att_part, dim=0).numpy())
+        for att_part in att_transformer:
+            att_transformer_out.append(torch.cat(att_part, dim=0).numpy())
 
-    return predict_res.numpy(), true_label.numpy(), context, primary_gene_name, partner_gene_name
+    if not output_att:
+        return predict_res.numpy(), true_label.numpy(), context, primary_gene_name, partner_gene_name
+    else:
+        return predict_res.numpy(), true_label.numpy(), att_cross_out, att_transformer_out, context, primary_gene_name, partner_gene_name
 
 
 
@@ -598,3 +759,19 @@ def independent_evaluate(data, type):
     
 
     return pd.DataFrame(result, index=[0])
+
+
+def independent_exact_matching(data):
+
+    data['true_inverse'] = np.max(data['true'].values)-data['true'].values
+
+    grouped = data.groupby(['gene1', 'gene2'])
+    match_cnt = 0
+
+    for (g1, g2), group in grouped:
+        predict_order = group.sort_values(by='predict', ascending=False)['cancer'].tolist()
+        true_order = group.sort_values(by='true', ascending=False)['cancer'].tolist()
+        if predict_order == true_order:
+            match_cnt += 1
+    
+    return match_cnt / len(grouped)

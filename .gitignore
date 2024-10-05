@@ -5,3 +5,6 @@
 /sh
 /preprocess.ipynb
 /SL_downstream.ipynb
+/IDH1_analysis.ipynb
+/config/cancer_specific
+/config/cancer_specific2.yaml

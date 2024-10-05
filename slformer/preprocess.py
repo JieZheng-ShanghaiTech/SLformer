@@ -225,7 +225,7 @@ class Data_Preprocess():
     
 
 
-    def data_prepare_genesent(self, sent_n=200, additional=False):
+    def data_prepare_genesent(self, sent_n=200, additional=False, transform=True):
 
         if not additional:
             cancer_list = list(self.config.sc_samples.keys())
@@ -233,12 +233,18 @@ class Data_Preprocess():
             cancer_list = list(self.config.sc_samples.keys())+list(self.config.add_sc_samples.keys())
 
         # gene sentence
-        gene_sent_map, sent_mask_map = construct_gene_sent(self.data_path_repository, cancer_list, n=sent_n)
+        gene_sent_map, sent_mask_map = construct_gene_sent(self.data_path_repository, cancer_list, sent_n=sent_n, transform=transform)
         
-        with open(os.path.join(self.data_path_repository["map"], f"gene2sent_n{sent_n}.pkl"), 'wb') as f:
-            pkl.dump(gene_sent_map, f)
-        with open(os.path.join(self.data_path_repository["map"], f"sent_mask_n{sent_n}.pkl"), 'wb') as f:
-            pkl.dump(sent_mask_map, f)
+        if transform: 
+            with open(os.path.join(self.data_path_repository["map"], f"gene2sent_n{sent_n}.pkl"), 'wb') as f:
+                pkl.dump(gene_sent_map, f)
+            with open(os.path.join(self.data_path_repository["map"], f"sent_mask_n{sent_n}.pkl"), 'wb') as f:
+                pkl.dump(sent_mask_map, f)
+        else:
+            with open(os.path.join(self.data_path_repository["map"], f"gene2sent_n{sent_n}_notransform.pkl"), 'wb') as f:
+                pkl.dump(gene_sent_map, f)
+            with open(os.path.join(self.data_path_repository["map"], f"sent_mask_n{sent_n}_notransform.pkl"), 'wb') as f:
+                pkl.dump(sent_mask_map, f)
 
 
 
@@ -330,7 +336,7 @@ def construct_coexp_graph(cancer_type, coexp_dir, output_dir, gene_list_file, pe
             pkl.dump(degree_info, f)
 
 
-def construct_gene_sent(data_path_repository, cancer_list, sent_n):
+def construct_gene_sent(data_path_repository, cancer_list, sent_n, transform):
 
     n_genesent_dir = os.path.join(data_path_repository["genesent_root"], f"gene_sentence_n{sent_n}")
 
@@ -348,8 +354,8 @@ def construct_gene_sent(data_path_repository, cancer_list, sent_n):
     create_dir(n_genesent_dir)
     gsentence_load.process(
             max_nodes_sampling=sent_n,
-            thr=0.99,
-            transform=True,
+            thr=99,
+            transform=transform,
             filt_by_geneformer=True
         )
 
@@ -607,14 +613,17 @@ if __name__ == "__main__":
     # data_preprocess.data_prepare_coexp()
 
     # # preprocess and prepare gene sentence data
-    # data_preprocess.data_prepare_genesent(n=200)
+    # data_preprocess.data_prepare_genesent(sent_n=200)
 
 
     # ===== add an additional cancer type =====
 
     # data_preprocess.data_prepare_sc(additional=True)
     # data_preprocess.data_prepare_coexp(additional=True)
-    data_preprocess.data_prepare_genesent(n=200, additional=True)
+    data_preprocess.data_prepare_genesent(sent_n=200, additional=True)
+
+    # data_preprocess.data_prepare_genesent(sent_n=200, additional=True, transform=False)
+
     
     
     

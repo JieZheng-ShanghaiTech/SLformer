@@ -44,12 +44,14 @@ def train(device, model, criterion, m, args, train_loader, model_save_path, resu
     not_improved_count = 0
     best_metric_record = {}, {}
 
-    # optimizer = torch.optim.Adam(model.parameters(), lr=args.lr, betas=(0.9, 0.99), eps=args.eps, weight_decay=args.weight_decay)
-    optimizer = torch.optim.Adam([
-        {'params': model.pos_encoder.parameters(), 'lr': args.transformer_lr, 'betas': (0.9, 0.99), 'eps': args.eps, 'weight_decay': args.weight_decay},
-        {'params': model.transformer_encoder.parameters(), 'lr': args.transformer_lr, 'betas': (0.9, 0.99), 'eps': args.eps, 'weight_decay': args.weight_decay},
-        {'params': model.predictor.parameters(), 'lr': args.predictor_lr, 'betas': (0.9, 0.99), 'eps': args.eps, 'weight_decay': args.weight_decay},
-        ])
+    if model_class == "geneformer":
+        optimizer = torch.optim.Adam(model.parameters(), lr=args.predictor_lr, betas=(0.9, 0.99), eps=args.eps, weight_decay=args.weight_decay)
+    else:
+        optimizer = torch.optim.Adam([
+            {'params': model.pos_encoder.parameters(), 'lr': args.transformer_lr, 'betas': (0.9, 0.99), 'eps': args.eps, 'weight_decay': args.weight_decay},
+            {'params': model.transformer_encoder.parameters(), 'lr': args.transformer_lr, 'betas': (0.9, 0.99), 'eps': args.eps, 'weight_decay': args.weight_decay},
+            {'params': model.predictor.parameters(), 'lr': args.predictor_lr, 'betas': (0.9, 0.99), 'eps': args.eps, 'weight_decay': args.weight_decay},
+            ])
     # scheduler = ReduceLROnPlateau(optimizer, mode='max', factor=args.lr_factor, patience=args.lr_patience)
     scheduler = ReduceLROnPlateau(optimizer, mode='max', factor=args.lr_factor, patience=args.lr_patience, verbose=True)
     #############

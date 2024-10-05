@@ -15,54 +15,99 @@ task:
     # kegg: ./data/saved_data/inference/IDH1_DDR_LAML_kegg.npy
     # reactome: ./data/saved_data/inference/IDH1_DDR_LAML_reactome.npy
   model:
-    cross_cancer_no1: 
+    # cross_cancer_no1: 
+    #   model_type: transformer
+    #   path: ./experiment/cross_cancer/transformer/2024-08-30-15:46:22
+    # cross_cancer_no2: 
+    #   model_type: transformer
+    #   path: ./experiment/cross_cancer/transformer/2024-08-30-10:24:21
+    # cross_cancer_no2.6: 
+    #   model_type: transformer
+    #   path: ./experiment/cross_cancer/transformer/2024-08-31-15:45:43
+    # cross_cancer_no2.7: 
+    #   model_type: transformer
+    #   path: ./experiment/cross_cancer/transformer/2024-08-31-10:38:23
+    # cross_cancer_no2.8: 
+    #   model_type: transformer
+    #   path: ./experiment/cross_cancer/transformer/2024-08-31-12:52:00
+    # cross_cancer_no2.9: 
+    #   model_type: transformer
+    #   path: ./experiment/cross_cancer/transformer/2024-08-31-03:54:44
+    # cross_cancer_no3: 
+    #   model_type: transformer
+    #   path: ./experiment/cross_cancer/transformer/2024-08-30-17:08:59
+    # cross_cancer_no3.1: 
+    #   model_type: transformer
+    #   path: ./experiment/cross_cancer/transformer/2024-08-31-11:49:08
+    # cross_cancer_no3.2: 
+    #   model_type: transformer
+    #   path: ./experiment/cross_cancer/transformer/2024-08-31-17:19:46
+    # cross_cancer_no3.3: 
+    #   model_type: transformer
+    #   path: ./experiment/cross_cancer/transformer/2024-08-31-13:44:54
+    # cross_cancer_no3.4: 
+    #   model_type: transformer
+    #   path: ./experiment/cross_cancer/transformer/2024-08-31-09:31:29
+    # cross_cancer_no4: 
+    #   model_type: transformer
+    #   path: ./experiment/cross_cancer/transformer/2024-08-30-14:00:11
+    # cross_cancer_no5: 
+    #   model_type: transformer
+    #   path: ./experiment/cross_cancer/transformer/2024-08-30-19:41:33
+    # cross_cancer_no6: 
+    #   model_type: transformer
+    #   path: ./experiment/cross_cancer/transformer/2024-08-30-21:17:15
+    # cross_cancer_no7: 
+    #   model_type: transformer
+    #   path: ./experiment/cross_cancer/transformer/2024-08-31-00:05:36
+    # cross_cancer_no8: 
+    #   model_type: transformer
+    #   path: ./experiment/cross_cancer/transformer/2024-08-30-11:20:24
+    cross_cancer_all_no1: 
       model_type: transformer
-      path: ./experiment/cross_cancer/transformer/2024-08-30-15:46:22
-    cross_cancer_no2: 
+      path: ./experiment/cross_cancer_all/transformer/2024-10-02-09:23:05
+    cross_cancer_all_no2: 
       model_type: transformer
-      path: ./experiment/cross_cancer/transformer/2024-08-30-10:24:21
-    cross_cancer_no2.6: 
+      path: ./experiment/cross_cancer_all/transformer/2024-10-03-20:23:49
+    cross_cancer_all_no3: 
       model_type: transformer
-      path: ./experiment/cross_cancer/transformer/2024-08-31-15:45:43
-    cross_cancer_no2.7: 
+      path: ./experiment/cross_cancer_all/transformer/2024-10-02-17:56:18
+    cross_cancer_all_no3.1: 
       model_type: transformer
-      path: ./experiment/cross_cancer/transformer/2024-08-31-10:38:23
-    cross_cancer_no2.8: 
+      path: ./experiment/cross_cancer_all/transformer/2024-10-04-21:34:43
+    cross_cancer_all_no4: 
       model_type: transformer
-      path: ./experiment/cross_cancer/transformer/2024-08-31-12:52:00
-    cross_cancer_no2.9: 
+      path: ./experiment/cross_cancer_all/transformer/2024-10-02-12:05:38
+    cross_cancer_all_no4.1: 
       model_type: transformer
-      path: ./experiment/cross_cancer/transformer/2024-08-31-03:54:44
-    cross_cancer_no3: 
+      path: ./experiment/cross_cancer_all/transformer/2024-10-04-10:41:36
+    cross_cancer_all_no5:
       model_type: transformer
-      path: ./experiment/cross_cancer/transformer/2024-08-30-17:08:59
-    cross_cancer_no3.1: 
+      path: ./experiment/cross_cancer_all/transformer/2024-10-03-12:00:59
+    cross_cancer_all_no5.1:
       model_type: transformer
-      path: ./experiment/cross_cancer/transformer/2024-08-31-11:49:08
-    cross_cancer_no3.2: 
+      path: ./experiment/cross_cancer_all/transformer/2024-10-04-12:34:18
+    cross_cancer_all_no6: 
       model_type: transformer
-      path: ./experiment/cross_cancer/transformer/2024-08-31-17:19:46
-    cross_cancer_no3.3: 
+      path: ./experiment/cross_cancer_all/transformer/2024-10-03-00:46:22
+    cross_cancer_all_no7: 
       model_type: transformer
-      path: ./experiment/cross_cancer/transformer/2024-08-31-13:44:54
-    cross_cancer_no3.4: 
+      path: ./experiment/cross_cancer_all/transformer/2024-10-04-08:46:58
+    cross_cancer_all_no8: 
       model_type: transformer
-      path: ./experiment/cross_cancer/transformer/2024-08-31-09:31:29
-    cross_cancer_no4: 
+      path: ./experiment/cross_cancer_all/transformer/2024-10-03-22:06:01
+    cross_cancer_all_no9:
       model_type: transformer
-      path: ./experiment/cross_cancer/transformer/2024-08-30-14:00:11
-    cross_cancer_no5: 
+      path: ./experiment/cross_cancer_all/transformer/2024-10-04-06:21:43
+    cross_cancer_all_no10:
       model_type: transformer
-      path: ./experiment/cross_cancer/transformer/2024-08-30-19:41:33
-    cross_cancer_no6: 
+      path: ./experiment/cross_cancer_all/transformer/2024-10-03-18:20:53
+    cross_cancer_all_no11:
       model_type: transformer
-      path: ./experiment/cross_cancer/transformer/2024-08-30-21:17:15
-    cross_cancer_no7: 
+      path: ./experiment/cross_cancer_all/transformer/2024-10-03-09:42:30
+    cross_cancer_all_no12:
       model_type: transformer
-      path: ./experiment/cross_cancer/transformer/2024-08-31-00:05:36
-    cross_cancer_no8: 
-      model_type: transformer
-      path: ./experiment/cross_cancer/transformer/2024-08-30-11:20:24
+      path: ./experiment/cross_cancer_all/transformer/2024-10-03-05:23:47
     
     
 

@@ -6,12 +6,13 @@ sc_dir: /data/xinliu/GeneSentence/TISCH2/
 SL_data_dir: ./data/SL_data
 
 # model_type = "geneformer" or "transformer"
-model_type: transformer
+model_type: geneformer
+# model_type: transformer
 
 # task = cancer_specific, mix, or cross_cancer
 task: 
-  type: mix
-  # type: mix_all
+  # type: mix
+  type: mix_all
   cancer: [all]
 
 SL_dataset:

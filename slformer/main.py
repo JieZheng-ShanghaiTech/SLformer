@@ -13,9 +13,7 @@ parser = argparse.ArgumentParser(description='SL prediction')
 
 parser.add_argument('--data_config_file', type=str, default="./config/data_preprocess.yaml",
                     help='data preprocess config file path')
-# parser.add_argument('--config_file', type=str, default="./config/cancer_specific2.yaml",
-#                     help='config file path')
-parser.add_argument('--config_file', type=str, default="./config/indep_test_cfg/config_0_0.yaml",
+parser.add_argument('--config_file', type=str, default="./config/independent_test_compare.yaml",
                     help='config file path')
 parser.add_argument('--wandb_track', type=int, default=0,
                     help='whether to track model performance on wandb')
@@ -29,7 +27,7 @@ parser.add_argument('--n', type=int, default=10,
 parser.add_argument('--augmentation', type=str, default=None,
                     help='whether to augment the gene sentence input')
 
-parser.add_argument('--device', type=int, default=0,
+parser.add_argument('--device', type=int, default=1,
                     help='which gpu to use if any (default: 0)')
 parser.add_argument('--batch_size', type=int, default=512,
                     help='input batch size for training (default: 512)')
@@ -55,12 +53,12 @@ parser.add_argument('--lr_patience', type=float, default=3,
 # MLP
 parser.add_argument('--mlp_input_dim', type=int, default=256*2,
                     help='input dim for MLP')
-parser.add_argument('--mlp_hidden_dim', type=int, default=128,
+parser.add_argument('--mlp_hidden_dim', type=int, default=256,
                     help='hidden dim for MLP')
 parser.add_argument('--mlp_output_dim', type=int, default=1,
                     help='output dim for MLP')
 # Transformer
-parser.add_argument('--d_model', type=int, default=256,
+parser.add_argument('--d_model', type=int, default=256*2,
                     help='')
 parser.add_argument('--n_head', type=int, default=1,
                     help='')
@@ -68,7 +66,9 @@ parser.add_argument('--dropout', type=float, default=0.1,
                     help='')
 parser.add_argument('--transformer_hidden_dim', type=int, default=256,
                     help='')
-parser.add_argument('--num_layers', type=int, default=1,
+parser.add_argument('--transformer_num_layers', type=int, default=2,
+                    help='')
+parser.add_argument('--att_num_layers', type=int, default=1,
                     help='')
 parser.add_argument('--add_att', type=int, default=1,
                     help='')
@@ -133,12 +133,11 @@ if "pretrain" in args.config_file:
 
 elif "cancer_specific" in args.config_file or "mix" in args.config_file or "cross_cancer" in args.config_file:
     ### train and test
-    if args.n < 50:
-        experiment_set.run_experiment(
-            save_model=args.save_model,
-            save_result=args.save_result,
-            wandb_track=args.wandb_track,
-        )
+    experiment_set.run_experiment(
+        save_model=args.save_model,
+        save_result=args.save_result,
+        wandb_track=args.wandb_track,
+    )
 
 
 elif "IDH1_inference" in args.config_file:
@@ -149,4 +148,5 @@ elif "IDH1_inference" in args.config_file:
 elif "independent_test" in args.config_file:
     ### independent test
     # experiment_set.independent_test()
-    experiment_set.independent_test(stat=True)
+    # experiment_set.independent_test(stat=True)
+    experiment_set.independent_test_on_mix()

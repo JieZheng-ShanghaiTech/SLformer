@@ -1,0 +1,147 @@
+
+EXPERIMENT_DIR: ./experiment
+SAVED_DATA_DIR: ./data/saved_data
+sc_dir: /data/xinliu/GeneSentence/TISCH2/
+
+SL_data_dir: ./data/SL_data
+
+task: 
+  type: independent_test
+  model:
+    # mix:
+    #   model_type: transformer
+    #   path: ./experiment/mix_all/transformer/2024-10-03-07:48:53
+    #   # path: ./experiment/mix_all/transformer/2024-09-08-15:53:56
+    # CESC:
+    #   model_type: transformer
+    #   path: ./experiment/cancer_specific_all/transformer/2024-10-04-11:49:09
+    # OV:
+    #   model_type: transformer
+    #   path: ./experiment/cancer_specific_all/transformer/2024-10-04-11:49:09
+    # LAML:
+    #   model_type: transformer
+    #   path: ./experiment/cancer_specific_all/transformer/2024-10-04-11:49:09
+    # LUAD:
+    #   model_type: transformer
+    #   path: ./experiment/cancer_specific_all/transformer/2024-10-04-11:49:09
+    # COAD:
+    #   model_type: transformer
+    #   path: ./experiment/cancer_specific_all/transformer/2024-10-04-11:49:09
+    # SKCM:
+    #   model_type: transformer
+    #   path: ./experiment/cancer_specific_all/transformer/2024-10-04-11:49:09
+
+    mix:
+      model_type: geneformer
+      path: ./experiment/mix_all/geneformer/2024-10-04-12:47:47
+    CESC:
+      model_type: geneformer
+      path: ./experiment/cancer_specific_all/geneformer/2024-10-04-15:44:06
+    OV:
+      model_type: geneformer
+      path: ./experiment/cancer_specific_all/geneformer/2024-10-04-15:44:06
+    LAML:
+      model_type: geneformer
+      path: ./experiment/cancer_specific_all/geneformer/2024-10-04-15:44:06
+    LUAD:
+      model_type: geneformer
+      path: ./experiment/cancer_specific_all/geneformer/2024-10-04-15:44:06
+    COAD:
+      model_type: geneformer
+      path: ./experiment/cancer_specific_all/geneformer/2024-10-04-15:44:06
+    SKCM:
+      model_type: geneformer
+      path: ./experiment/cancer_specific_all/geneformer/2024-10-04-15:44:06
+
+
+SL_dataset:
+  general:
+    path: ./data/SL_data/raw/SLlabel_general.xlsx
+  # DBKO_study1_LUAD:
+  #   path: ./data/SL_data/processed/SLlabel_DBKO_study1_LUAD.csv
+  #   label_type: binary
+  # DBKO_study1_CESC:
+  #   path: ./data/SL_data/processed/SLlabel_DBKO_study1_CESC.csv
+  #   label_type: binary
+  DBKO_study2:
+    path: ./data/SL_data/processed/SLlabel_DBKO_study2.csv
+    context: LAML
+    label_type: rank
+  # DBKO_study3:
+  #   path: ./data/SL_data/processed/SLlabel_DBKO_study3.csv
+  #   label_type: rank
+  # primpartner_study1_binary: 
+  #   path: ./data/SL_data/processed/SLlabel_primpartner_study1_binary.csv
+  #   label_type: binary
+  # primpartner_study1_fitness_DLD1: 
+  #   path: ./data/SL_data/processed/SLlabel_primpartner_study1_DLD1.csv
+  #   label_type: pos_score
+  # primpartner_study1_fitness_HCT116: 
+  #   path: ./data/SL_data/processed/SLlabel_primpartner_study1_HCT116.csv
+  #   label_type: pos_score
+  primpartner_study2_binary:
+    path: ./data/SL_data/processed/SLlabel_primpartner_study2_binary.csv
+    context: LUAD
+    label_type: binary
+  primpartner_study2_viability: 
+    path: ./data/SL_data/processed/SLlabel_primpartner_study2_viability.csv
+    context: LUAD
+    label_type: rank
+  primpartner_study3_COAD: 
+    path: ./data/SL_data/processed/SLlabel_primpartner_study3_COAD.csv
+    context: COAD
+    label_type: rank
+  primpartner_study3_OV: 
+    path: ./data/SL_data/processed/SLlabel_primpartner_study3_OV.csv
+    context: OV
+    label_type: rank
+  paralog_study1_binary:
+    path: ./data/SL_data/processed/SLlabel_paralog_study1_binary.csv
+    context: mix
+    context_all: 
+      - CESC
+      - LUAD
+    label_type: binary
+  # paralog_study1_binary_CESC:
+  #   path: ./data/SL_data/processed/SLlabel_paralog_study1_binary_CESC.csv
+  #   label_type: binary
+  # paralog_study1_binary_LUAD:
+  #   path: ./data/SL_data/processed/SLlabel_paralog_study1_binary_LUAD.csv
+  #   label_type: binary
+  paralog_study1_score:
+    path: ./data/SL_data/processed/SLlabel_paralog_study1_score.csv
+    context: mix
+    context_all: 
+      - CESC
+      - LUAD
+    label_type: rank
+  # paralog_study1_score_CESC:
+  #   path: ./data/SL_data/processed/SLlabel_paralog_study1_score_CESC.csv
+  #   label_type: rank
+  # paralog_study1_score_LUAD:
+  #   path: ./data/SL_data/processed/SLlabel_paralog_study1_score_LUAD.csv
+  #   label_type: rank
+  # paralog_study2_binary: 
+  #   path: ./data/SL_data/processed/SLlabel_paralog_study2_binary.csv
+  #   label_type: binary
+  paralog_study2_score: 
+    path: ./data/SL_data/processed/SLlabel_paralog_study2_score.csv
+    context: mix
+    context_all: 
+      - COAD
+      - LUAD
+      - OV
+    label_type: rank
+  # paralog_study2_score_COAD: 
+  #   path: ./data/SL_data/processed/SLlabel_paralog_study2_score_COAD.csv
+  #   label_type: rank
+  # paralog_study2_score_LUAD: 
+  #   path: ./data/SL_data/processed/SLlabel_paralog_study2_score_LUAD.csv
+  #   label_type: rank
+  # paralog_study2_score_OV: 
+  #   path: ./data/SL_data/processed/SLlabel_paralog_study2_score_OV.csv
+  #   label_type: rank
+  paralog_study3: 
+    path: ./data/SL_data/processed/SLlabel_paralog_study3_binary.csv
+    context: SKCM
+    label_type: binary

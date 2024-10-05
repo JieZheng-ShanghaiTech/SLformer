@@ -10,8 +10,8 @@ model_type: transformer
 
 # task = cancer_specific, mix, or cross_cancer
 task: 
-  type: cross_cancer
-  # type: cross_cancer_all
+  # type: cross_cancer
+  type: cross_cancer_all
   cancer: [KIRC, COAD, LAML, OV, BRCA, CESC, SKCM, LUAD]
 
 SL_dataset:
