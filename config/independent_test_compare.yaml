@@ -95,13 +95,13 @@ SL_dataset:
     path: ./data/SL_data/processed/SLlabel_primpartner_study3_OV.csv
     context: OV
     label_type: rank
-  paralog_study1_binary:
-    path: ./data/SL_data/processed/SLlabel_paralog_study1_binary.csv
-    context: mix
-    context_all: 
-      - CESC
-      - LUAD
-    label_type: binary
+  # paralog_study1_binary:
+  #   path: ./data/SL_data/processed/SLlabel_paralog_study1_binary.csv
+  #   context: mix
+  #   context_all: 
+  #     - CESC
+  #     - LUAD
+  #   label_type: binary
   # paralog_study1_binary_CESC:
   #   path: ./data/SL_data/processed/SLlabel_paralog_study1_binary_CESC.csv
   #   label_type: binary

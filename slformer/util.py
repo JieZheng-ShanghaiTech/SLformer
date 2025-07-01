@@ -120,7 +120,7 @@ def calc_random_auc(test_loader):
 
 
 
-def get_train_test_SL(data_total, cv=1, data_all=False, split_by_cancer=False, test_cancer=None, return_idx=False):
+def get_train_test_SL(data_total, cv=1, test_size=0.2, data_all=False, split_by_cancer=False, test_cancer=None, return_idx=False):
 
     if data_all:
         return data_total
@@ -128,7 +128,7 @@ def get_train_test_SL(data_total, cv=1, data_all=False, split_by_cancer=False, t
     if split_by_cancer==True and test_cancer is not None:
         test_data, train_data = split_data_by_cancer(data_total, test_cancer=test_cancer, return_idx=return_idx)
     else:
-        test_data, train_data = split_data(data_total, cv=cv, seed=1, return_idx=return_idx)
+        test_data, train_data = split_data(data_total, test_size=test_size, cv=cv, seed=1, return_idx=return_idx)
     
     return test_data, train_data
 

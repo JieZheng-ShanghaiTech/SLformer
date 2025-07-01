@@ -233,7 +233,7 @@ def train(device, model, criterion, m, args, train_loader, model_save_path, resu
                 test_record["test_acc"] = metrics.accuracy_score(label_test.to(torch.int), pred_int_test)
             
             # scheduler.step(test_record["test_aupr"])
-            scheduler.step(test_record["test_aupr"]) #############
+            scheduler.step(test_record["test_aupr"])
 
             # early stopping   
             epoch_metric = test_record["test_aupr"]

@@ -6,16 +6,15 @@ sc_dir: /data/xinliu/GeneSentence/TISCH2/
 SL_data_dir: ./data/SL_data
 
 # model_type = "geneformer" or "transformer"
-# model_type: geneformer
 model_type: transformer
 
-# task = cancer_specific, mix, or cross_cancer
 task: 
-  # type: mix
-  # type: mix_all
-  type: mix_add_GBM
-  # type: mix_add_GBM_stratified
-  cancer: [all]
+  type: fewshot
+  # cancer_out: OV
+  cancer_out: BRCA
+  # mix_checkpoint: ./experiment/fewshot/2024-10-29-00:25:29
+  mix_checkpoint: ./experiment/fewshot/2024-11-08-22:43:57
+  # cross-cancer_checkpoint
 
 SL_dataset:
   general:

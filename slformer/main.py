@@ -13,8 +13,14 @@ parser = argparse.ArgumentParser(description='SL prediction')
 
 parser.add_argument('--data_config_file', type=str, default="./config/data_preprocess.yaml",
                     help='data preprocess config file path')
-parser.add_argument('--config_file', type=str, default="./config/independent_test_compare.yaml",
+# parser.add_argument('--config_file', type=str, default="./config/mix.yaml",
+#                     help='config file path')
+parser.add_argument('--config_file', type=str, default="./config/all_inference.yaml",
                     help='config file path')
+# parser.add_argument('--config_file', type=str, default="config/IDH1_permute.yaml",
+#                     help='config file path')
+# parser.add_argument('--config_file', type=str, default="./config/get_att.yaml",
+#                     help='config file path')
 parser.add_argument('--wandb_track', type=int, default=0,
                     help='whether to track model performance on wandb')
 parser.add_argument('--save_model', type=int, default=0,
@@ -24,12 +30,14 @@ parser.add_argument('--save_result', type=int, default=1,
 
 parser.add_argument('--n', type=int, default=10,
                     help='genesentence length n')
+parser.add_argument('--add_kg', type=int, default=1,
+                    help='whether to add KG embedding')
 parser.add_argument('--augmentation', type=str, default=None,
                     help='whether to augment the gene sentence input')
 parser.add_argument('--anchor', type=int, default=1,
                     help='whether to include the head anchor gene in a gene sentence')
 
-parser.add_argument('--device', type=int, default=1,
+parser.add_argument('--device', type=int, default=0,
                     help='which gpu to use if any (default: 0)')
 parser.add_argument('--batch_size', type=int, default=512,
                     help='input batch size for training (default: 512)')
@@ -76,7 +84,7 @@ parser.add_argument('--add_att', type=int, default=1,
                     help='')
 parser.add_argument('--att_nhead', type=int, default=2,
                     help='')
-parser.add_argument('--random_init', type=int, default=0,
+parser.add_argument('--random_init', type=int, default=1,
                     help='')
 
 
@@ -84,7 +92,7 @@ parser.add_argument('--random_init', type=int, default=0,
 args = parser.parse_args()
 logging.basicConfig(level=logging.INFO)
 
-set_seed(1)
+set_seed(args.random_init)
 
 with open(args.data_config_file, 'r') as f:
     data_config = easydict.EasyDict(yaml.safe_load(f))
@@ -142,13 +150,43 @@ elif "cancer_specific" in args.config_file or "mix" in args.config_file or "cros
     )
 
 
-elif "IDH1_inference" in args.config_file:
+# elif "IDH1_inference" in args.config_file:
+elif "IDH1_inference" in args.config_file or "PTEN_inference" in args.config_file:
     ### Infer IDH1-PRKDC
     experiment_set.infer_primpartner()
+
+
+elif "IDH1_permute" in args.config_file:
+    ## IDH1 random permute
+    # experiment_set.permut_primpartner(n_sample=1000, 
+    #                                 model_path="./experiment/mix_add_GBM/transformer/2024-11-28-11:30:19", 
+    #                                 model_type='transformer', cancer='Glioma')
+    cancer = config.task.cancer
+    for name, model_path in config.model.items():
+        experiment_set.permut_primpartner(n_sample=1000, n_iter=20,
+                                    model_path=model_path, savename=name, 
+                                    model_type='transformer', cancer=cancer)
 
 
 elif "independent_test" in args.config_file:
     ### independent test
     # experiment_set.independent_test()
     # experiment_set.independent_test(stat=True)
-    experiment_set.independent_test_on_mix()
+    # experiment_set.independent_test_on_mix()
+    # experiment_set.independent_test_on_mix(save_raw=True)
+    # experiment_set.independent_test_on_mix(save_raw=True, random_simu=True)
+    experiment_set.independent_test_on_mix(save_raw=True, raw_score=True, random_simu=False)
+
+elif "all_inference" in args.config_file:
+    experiment_set.infer_all(output_att=False, output_emb=True)
+
+elif "att" in args.config_file:
+    experiment_set.get_att()
+
+elif "fewshot" in args.config_file:
+    # experiment_set.fewshot_train()
+    # experiment_set.fewshot_test(test='mix_fewshot')
+    # experiment_set.fewshot_test(test='cancer_specific')
+
+    experiment_set.finetune_GBM()
+

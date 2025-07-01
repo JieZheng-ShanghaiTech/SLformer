@@ -1,0 +1,81 @@
+EXPERIMENT_DIR: ./experiment
+SAVED_DATA_DIR: ./data/saved_data
+sc_dir: /data/xinliu/GeneSentence/TISCH2/
+SL_data_dir: ./data/SL_data
+task:
+  type: IDH1_permute_inference_stratified
+  gene_list: ./data/DDR_genelist/reactome_dna_repair.txt
+model:
+  model_no_0: ./experiment/mix_add_GBM_stratified/transformer/2025-03-04-01:19:23
+  model_no_1: ./experiment/mix_add_GBM_stratified/transformer/2025-03-04-14:31:00
+  model_no_2: ./experiment/mix_add_GBM_stratified/transformer/2025-03-04-16:05:13
+  model_no_3: ./experiment/mix_add_GBM_stratified/transformer/2025-03-04-07:11:09
+  model_no_4: ./experiment/mix_add_GBM_stratified/transformer/2025-03-04-12:54:04
+  model_no_5: ./experiment/mix_add_GBM_stratified/transformer/2025-03-04-04:14:32
+  model_no_6: ./experiment/mix_add_GBM_stratified/transformer/2025-03-04-13:10:35
+  model_no_7: ./experiment/mix_add_GBM_stratified/transformer/2025-03-03-08:05:52
+  model_no_8: ./experiment/mix_add_GBM_stratified/transformer/2025-03-04-10:02:38
+  model_no_9: ./experiment/mix_add_GBM_stratified/transformer/2025-03-04-14:00:07
+  model_no_10: ./experiment/mix_add_GBM_stratified/transformer/2025-03-04-07:43:57
+  model_no_11: ./experiment/mix_add_GBM_stratified/transformer/2025-03-03-14:11:45
+  model_no_12: ./experiment/mix_add_GBM_stratified/transformer/2025-03-03-09:37:04
+  model_no_13: ./experiment/mix_add_GBM_stratified/transformer/2025-03-04-10:44:36
+  model_no_14: ./experiment/mix_add_GBM_stratified/transformer/2025-03-04-02:36:43
+  model_no_15: ./experiment/mix_add_GBM_stratified/transformer/2025-03-04-01:04:13
+  model_no_16: ./experiment/mix_add_GBM_stratified/transformer/2025-03-04-02:09:10
+  model_no_17: ./experiment/mix_add_GBM_stratified/transformer/2025-03-04-13:41:49
+  model_no_18: ./experiment/mix_add_GBM_stratified/transformer/2025-03-04-08:02:52
+  model_no_19: ./experiment/mix_add_GBM_stratified/transformer/2025-03-03-14:43:16
+  model_no_20: ./experiment/mix_add_GBM_stratified/transformer/2025-03-04-08:36:03
+  model_no_21: ./experiment/mix_add_GBM_stratified/transformer/2025-03-04-04:52:59
+  model_no_22: ./experiment/mix_add_GBM_stratified/transformer/2025-03-04-01:51:29
+  model_no_23: ./experiment/mix_add_GBM_stratified/transformer/2025-03-03-15:30:03
+  model_no_24: ./experiment/mix_add_GBM_stratified/transformer/2025-03-03-19:49:04
+  model_no_25: ./experiment/mix_add_GBM_stratified/transformer/2025-03-03-19:33:48
+  model_no_26: ./experiment/mix_add_GBM_stratified/transformer/2025-03-03-20:03:20
+  model_no_27: ./experiment/mix_add_GBM_stratified/transformer/2025-03-03-10:31:31
+  model_no_28: ./experiment/mix_add_GBM_stratified/transformer/2025-03-04-09:33:51
+  model_no_29: ./experiment/mix_add_GBM_stratified/transformer/2025-03-04-03:08:48
+  model_no_30: ./experiment/mix_add_GBM_stratified/transformer/2025-03-03-13:59:05
+  # model_no_31: ./experiment/mix_add_GBM_stratified/transformer/2025-03-04-15:34:59
+  # model_no_32: ./experiment/mix_add_GBM_stratified/transformer/2025-03-04-01:34:31
+  # model_no_33: ./experiment/mix_add_GBM_stratified/transformer/2025-03-04-03:40:11
+  # model_no_34: ./experiment/mix_add_GBM_stratified/transformer/2025-03-03-21:00:24
+  # model_no_35: ./experiment/mix_add_GBM_stratified/transformer/2025-03-03-20:36:52
+  # model_no_36: ./experiment/mix_add_GBM_stratified/transformer/2025-03-03-14:26:06
+  # model_no_37: ./experiment/mix_add_GBM_stratified/transformer/2025-03-04-15:02:55
+  # model_no_38: ./experiment/mix_add_GBM_stratified/transformer/2025-03-04-06:56:08
+  # model_no_39: ./experiment/mix_add_GBM_stratified/transformer/2025-03-04-16:42:10
+  # model_no_40: ./experiment/mix_add_GBM_stratified/transformer/2025-03-04-07:26:44
+  # model_no_41: ./experiment/mix_add_GBM_stratified/transformer/2025-03-03-21:23:32
+  # model_no_42: ./experiment/mix_add_GBM_stratified/transformer/2025-03-04-17:19:38
+  # model_no_43: ./experiment/mix_add_GBM_stratified/transformer/2025-03-03-08:19:44
+  # model_no_44: ./experiment/mix_add_GBM_stratified/transformer/2025-03-04-11:25:43
+  # model_no_45: ./experiment/mix_add_GBM_stratified/transformer/2025-03-03-11:43:14
+  # model_no_46: ./experiment/mix_add_GBM_stratified/transformer/2025-03-03-08:51:52
+  # model_no_47: ./experiment/mix_add_GBM_stratified/transformer/2025-03-03-08:33:39
+  # model_no_48: ./experiment/mix_add_GBM_stratified/transformer/2025-03-04-00:16:11
+  # model_no_49: ./experiment/mix_add_GBM_stratified/transformer/2025-03-04-13:24:13
+  # model_no_50: ./experiment/mix_add_GBM_stratified/transformer/2025-03-04-09:03:43
+  # model_no_51: ./experiment/mix_add_GBM_stratified/transformer/2025-03-03-16:20:49
+  # model_no_52: ./experiment/mix_add_GBM_stratified/transformer/2025-03-03-09:13:32
+  # model_no_53: ./experiment/mix_add_GBM_stratified/transformer/2025-03-03-23:34:09
+  # model_no_54: ./experiment/mix_add_GBM_stratified/transformer/2025-03-03-18:02:19
+  # model_no_55: ./experiment/mix_add_GBM_stratified/transformer/2025-03-04-05:33:18
+  # model_no_56: ./experiment/mix_add_GBM_stratified/transformer/2025-03-03-13:15:03
+  # model_no_57: ./experiment/mix_add_GBM_stratified/transformer/2025-03-03-10:00:55
+  # model_no_58: ./experiment/mix_add_GBM_stratified/transformer/2025-03-04-12:12:01
+  # model_no_59: ./experiment/mix_add_GBM_stratified/transformer/2025-03-04-18:02:22
+  # model_no_60: ./experiment/mix_add_GBM_stratified/transformer/2025-03-03-22:59:39
+  # model_no_61: ./experiment/mix_add_GBM_stratified/transformer/2025-03-03-15:53:12
+  # model_no_62: ./experiment/mix_add_GBM_stratified/transformer/2025-03-04-06:14:53
+  # model_no_63: ./experiment/mix_add_GBM_stratified/transformer/2025-03-03-20:20:16
+  # model_no_64: ./experiment/mix_add_GBM_stratified/transformer/2025-03-03-18:49:50
+  # model_no_65: ./experiment/mix_add_GBM_stratified/transformer/2025-03-03-17:29:08
+  # model_no_66: ./experiment/mix_add_GBM_stratified/transformer/2025-03-03-21:54:00
+  # model_no_67: ./experiment/mix_add_GBM_stratified/transformer/2025-03-03-16:55:36
+  # model_no_68: ./experiment/mix_add_GBM_stratified/transformer/2025-03-03-15:04:58
+  # model_no_69: ./experiment/mix_add_GBM_stratified/transformer/2025-03-03-22:22:04
+  # model_no_70: ./experiment/mix_add_GBM_stratified/transformer/2025-03-03-11:07:29
+  # model_no_71: ./experiment/mix_add_GBM_stratified/transformer/2025-03-03-12:24:08
+

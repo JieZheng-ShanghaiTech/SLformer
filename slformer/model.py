@@ -71,12 +71,9 @@ class Transformer_Finetuner(nn.Module):
         # self.predictor = ResNetClassifier(config['d_model']*2)
 
 
-    def forward(self, x1, mask1, x2, mask2, g1id=None, g2id=None, device=None, output_att=False):
+    def forward(self, x1, mask1, x2, mask2, g1id=None, g2id=None, device=None):
 
         h_total = []
-        if output_att:
-            transformer_att_all = []    ## list of 2: [att_sent1 and att_sent2]
-        # print("x1, x2", x1.shape, x2.shape) # torch.Size([512, 10, 256]) torch.Size([512, 10, 256])
         for x, mask in [(x1, mask1), (x2, mask2)]:
             mask = (1-mask).bool()
             x = x.transpose(0,1)
@@ -86,15 +83,70 @@ class Transformer_Finetuner(nn.Module):
             x = self.pos_encoder(x)
             h = self.transformer_encoder(x, src_key_padding_mask=mask)
 
-            if output_att:
-                ## extract attention weights from transformer encoder layers
-                ## [batch_size, sent_len, sent_len]
-                transformer_att = []
-                for i, layer in enumerate(self.transformer_encoder.layers):
-                    transformer_att.append(layer.attention_weights)
-                transformer_att = torch.stack(transformer_att, dim=1)
-                ## [batch_size, num_layer, sent_len, sent_len]
-                transformer_att_all.append(transformer_att)
+            # pool = h.mean(dim=0)
+            if not self.config['add_att']:
+                h = h[0,:,:]    # [512, 256]
+            h_total.append(h)
+
+
+        if self.config['add_att']:
+            
+            fusion_output = self.fusion_model(h_total[0], h_total[1], mask1, mask2)
+
+            # fusion_output = self.fusion_model(h_total[0], h_total[1], mask1, mask2, g1id, g2id, device)
+            h_total = fusion_output
+        else:
+            h_total = torch.cat(h_total, dim=1) # [512, 512]
+        # else:
+        #     h_total = torch.cat(h_total, dim=-1)
+            # h_total = h_total.transpose(0,1).transpose(1,2)
+
+        out = self.predictor(h_total)
+        
+        return out
+    
+
+    def output_att(self, x1, mask1, x2, mask2):
+
+        transformer_att_all = []    ## list of 2: [att_sent1 and att_sent2]
+        h_total = []
+
+        for x, mask in [(x1, mask1), (x2, mask2)]:
+            mask = (1-mask).bool()
+            x = x.transpose(0,1)
+
+            x = x * math.sqrt(self.d_model)
+            x = self.pos_encoder(x)
+            h = self.transformer_encoder(x, src_key_padding_mask=mask)
+
+            ## extract attention weights from transformer encoder layers
+            ## [batch_size, sent_len, sent_len]
+            transformer_att = []
+            for i, layer in enumerate(self.transformer_encoder.layers):
+                transformer_att.append(layer.attention_weights)
+            transformer_att = torch.stack(transformer_att, dim=1)
+            ## [batch_size, num_layer, sent_len, sent_len]
+            transformer_att_all.append(transformer_att)
+
+            h_total.append(h)
+        
+        ## cross att
+        att_all = self.fusion_model.output_att(h_total[0], h_total[1], mask1, mask2)
+
+        return att_all, transformer_att_all
+
+
+    def output_emb(self, x1, mask1, x2, mask2):
+
+        h_total = []
+        for x, mask in [(x1, mask1), (x2, mask2)]:
+            mask = (1-mask).bool()
+            x = x.transpose(0,1)
+
+            # x = self.emb(x) * math.sqrt(self.d_model)
+            x = x * math.sqrt(self.d_model)
+            x = self.pos_encoder(x)
+            h = self.transformer_encoder(x, src_key_padding_mask=mask)
 
             # pool = h.mean(dim=0)
             if not self.config['add_att']:
@@ -104,26 +156,11 @@ class Transformer_Finetuner(nn.Module):
 
         if self.config['add_att']:
             
-            if not output_att:
-                fusion_output = self.fusion_model(h_total[0], h_total[1], mask1, mask2, output_att=output_att)
-            else:
-                fusion_output, att_all = self.fusion_model(h_total[0], h_total[1], mask1, mask2, output_att=output_att)
-                ## att_all: list of 4: [batch_size, layers*att_nhead, sent_len, sent_len]
+            fusion_output = self.fusion_model(h_total[0], h_total[1], mask1, mask2, cat=False)
+            return h_total, fusion_output
 
-            # fusion_output = self.fusion_model(h_total[0], h_total[1], mask1, mask2, g1id, g2id, device)
-            h_total = fusion_output
         else:
-            h_total = torch.cat(h_total, dim=1) # [512, 512]
-        # else:
-        #     h_total = torch.cat(h_total, dim=-1)
-            # h_total = h_total.transpose(0,1).transpose(1,2)
-            
-        out = self.predictor(h_total)
-
-        if self.config['add_att'] and output_att:
-            return out, att_all, transformer_att_all
-        else:
-            return out
+            return h_total
     
 
 class Transformer_Pretrain(nn.Module):
@@ -334,40 +371,55 @@ class CrossAttention(nn.Module):
         else:
             self.activation = activation
 
-    def forward(self, protein_input, text_input, mask1, mask2, all_loss=None, metric=None, output_att=False):
+    def forward(self, x1, x2, mask1, mask2, cat=True, all_loss=None, metric=None):
         # Padding for protein inputs
-        # protein_input, protein_mask = variadic_to_padded(protein_input, graph.num_residues, value=0)
+        # x1, protein_mask = variadic_to_padded(x1, graph.num_residues, value=0)
 
         for i, layer in enumerate(self.layers):
 
             if i == 0:
-                protein_input = protein_input.transpose(0, 1)
-                text_input = text_input.transpose(0, 1)
+                x1 = x1.transpose(0, 1)
+                x2 = x2.transpose(0, 1)
 
-            if not output_att:
-                protein_input, text_input = layer(protein_input, text_input, mask1.bool(), mask2.bool(), output_att)
-            else:
-                att_all_tmp = [[],[],[],[]]
-                att_all = []
-
-                ## alpha11, alpha22, alpha12, alpha21
-                att_total, protein_input, text_input = layer(protein_input, text_input, mask1.bool(), mask2.bool(), output_att)
-                for j, att in enumerate(att_total):
-                    att_all_tmp[j].append(att)
+            x1, x2 = layer(x1, x2, mask1.bool(), mask2.bool(), output_att=False)
 
             if self.batch_norm:
-                protein_input = self.protein_batch_norm_layers[i](protein_input.transpose(1, 2)).transpose(1, 2)
-                text_input = self.text_batch_norm_layers[i](text_input.transpose(1, 2)).transpose(1, 2)
+                x1 = self.protein_batch_norm_layers[i](x1.transpose(1, 2)).transpose(1, 2)
+                x2 = self.text_batch_norm_layers[i](x2.transpose(1, 2)).transpose(1, 2)
             if self.activation:
-                protein_input = self.activation(protein_input)
-                text_input = self.activation(text_input)
+                x1 = self.activation(x1)
+                x2 = self.activation(x2)
 
-        protein_output = scatter_mean(protein_input, mask1, dim=1)[:, 1:,].squeeze(1)
-        text_output = scatter_mean(text_input, mask1, dim=1)[:, 1:,].squeeze(1)
+        x1_output = scatter_mean(x1, mask1, dim=1)[:, 1:,].squeeze(1)
+        x2_output = scatter_mean(x2, mask1, dim=1)[:, 1:,].squeeze(1)
 
-        if not output_att:
-            return torch.cat([protein_output, text_output], dim=-1)
+        if cat:
+            return torch.cat([x1_output, x2_output], dim=-1)
         else:
+            return [x1_output, x2_output]
+
+        # return {
+        #     "gene1": protein_output,
+        #     "gene2": text_output
+        # }
+    
+
+    def output_att(self, x1, x2, mask1, mask2):
+
+        for i, layer in enumerate(self.layers):
+
+            if i == 0:
+                x1 = x1.transpose(0, 1)
+                x2 = x2.transpose(0, 1)
+
+            att_all_tmp = [[],[],[],[]]
+            att_all = []
+
+            ## alpha11, alpha22, alpha12, alpha21
+            att_total, _, _ = layer(x1, x2, mask1.bool(), mask2.bool(), output_att=True)
+            for j, att in enumerate(att_total):
+                att_all_tmp[j].append(att)
+            
             for att_part in att_all_tmp:
                 ## [l,b,n,n,a]
                 att_stack = torch.stack(att_part, dim=0)
@@ -375,13 +427,9 @@ class CrossAttention(nn.Module):
                 b,n = att_stack.shape[1], att_stack.shape[2]
                 att_stack = att_stack.permute(1, 0, 4, 2, 3).reshape(b,-1,n,n)
                 att_all.append(att_stack)
-            
-            return torch.cat([protein_output, text_output], dim=-1), att_all
 
-        # return {
-        #     "gene1": protein_output,
-        #     "gene2": text_output
-        # }
+        return att_all
+
 
 
 class CrossAttention_latefusion(nn.Module):
@@ -509,6 +557,15 @@ class MLP(nn.Module):
         for i in range(self.num_layers - 1):
             h = F.relu(self.batch_norms[i](self.linears[i](h)))
         return self.linears[-1](h)
+    
+
+    def output_att(self, x):
+
+        h = x
+        for i in range(self.num_layers - 1):
+            h = F.relu(self.batch_norms[i](self.linears[i](h)))
+        return h
+
 
 
 

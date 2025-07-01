@@ -1,0 +1,31 @@
+
+EXPERIMENT_DIR: ./experiment
+SAVED_DATA_DIR: ./data/saved_data
+sc_dir: /data/xinliu/GeneSentence/TISCH2/
+
+SL_data_dir: ./data/SL_data
+
+task: 
+  type: inference
+  name: all_SL
+  data: ./data/saved_data/SL_train_test_data/mix_all
+  model:
+    # mix_slformer_kg: 
+    #   model_type: transformer
+    #   path: ./experiment/mix_all/transformer/2024-10-13-01:42:53
+    # mix_slformer_nokg: 
+    #   model_type: transformer
+    #   path: ./experiment/mix_all/transformer/2024-10-13-02:07:48
+    
+    # mix_geneformer_kg: 
+    #   model_type: geneformer
+    #   path: ./experiment/mix_all/geneformer/2024-10-13-01:42:43
+    mix_geneformer_nokg: 
+      model_type: geneformer
+      path: ./experiment/mix_all/geneformer/2024-10-13-11:01:04
+
+
+SL_dataset:
+  general:
+    path: ./data/SL_data/raw/SLlabel_general.xlsx
+

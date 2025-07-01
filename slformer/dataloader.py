@@ -34,20 +34,20 @@ def prepare_SL_data(config, cancer, common_data, type="general"):
     return data_total
 
 
-def load_all_data_SL(all_data, gene_rpr_map, batch_size, n=None, anchor=True, bi_rpr=False, sent_mask=None, emb_mtx=None, augmentation=None):
+def load_all_data_SL(all_data, gene_rpr_map, batch_size, n=None, anchor=True, bi_rpr=False, sent_mask=None, emb_mtx=None, add_kg=1, augmentation=None):
 
-    loader = DataLoader(SL_Dataset(all_data, gene_rpr_map, n=n, anchor=anchor, bi_rpr=bi_rpr, sent_mask=sent_mask, emb_mtx=emb_mtx, augmentation=augmentation), batch_size=batch_size, shuffle=False)
+    loader = DataLoader(SL_Dataset(all_data, gene_rpr_map, n=n, anchor=anchor, bi_rpr=bi_rpr, sent_mask=sent_mask, emb_mtx=emb_mtx, add_kg=add_kg, augmentation=augmentation), batch_size=batch_size, shuffle=False)
     
     return loader
 
 
-def load_train_data_SL(test_data, train_data, gene_rpr_map, batch_size, n=None, anchor=True, bi_rpr=False, sent_mask=None, emb_mtx=None, augmentation=None):
+def load_train_data_SL(test_data, train_data, gene_rpr_map, batch_size, n=None, anchor=True, bi_rpr=False, sent_mask=None, emb_mtx=None, add_kg=1, augmentation=None):
 
     # sampler_test = get_weighted_sampler(test_data)
     # sampler_train = get_weighted_sampler(train_data)
 
-    train_dataset = SL_Dataset(train_data, gene_rpr_map, n=n, anchor=anchor, bi_rpr=bi_rpr, sent_mask=sent_mask, emb_mtx=emb_mtx, augmentation=augmentation)
-    test_dataset = SL_Dataset(test_data, gene_rpr_map, n=n, anchor=anchor, bi_rpr=bi_rpr, sent_mask=sent_mask, emb_mtx=emb_mtx, augmentation=None)
+    train_dataset = SL_Dataset(train_data, gene_rpr_map, n=n, anchor=anchor, bi_rpr=bi_rpr, sent_mask=sent_mask, emb_mtx=emb_mtx, add_kg=add_kg, augmentation=augmentation)
+    test_dataset = SL_Dataset(test_data, gene_rpr_map, n=n, anchor=anchor, bi_rpr=bi_rpr, sent_mask=sent_mask, emb_mtx=emb_mtx, add_kg=add_kg, augmentation=None)
 
     drop_last = {"train":False, "test":False}
     for type, dataset in {"train":train_dataset, "test":test_dataset}.items():
@@ -115,6 +115,18 @@ class SL_Loader():
 
             if data_type == "general":
                 SL_general_data = self.construct_data(self.SL_general_df, cancer_filt)
+                ## additionally add GBM data
+                # GBM_data = np.load("./data/saved_data/GBM_SL/GBM_SL.npy")
+                # filt_data = []
+                # for i in range(len(GBM_data)):
+                #     g1_idx = GBM_data[i, 0]
+                #     g2_idx = GBM_data[i, 1]
+                #     if g1_idx in self.gene_emb_map[8] and g2_idx in self.gene_emb_map[8]:
+                #         if g1_idx in self.geneformer_emb_map[8] and g2_idx in self.geneformer_emb_map[8]:
+                #             filt_data.append([g1_idx, g2_idx, GBM_data[i, 2], 8])
+                # print("size of filt GBM data:", len(filt_data))
+                # SL_general_data = np.concatenate((SL_general_data, filt_data), axis=0)
+                
                 return SL_general_data
             
             elif data_type in self.SL_datasets.keys():
@@ -122,7 +134,6 @@ class SL_Loader():
                 SL_filt_general = self.filt_SL_general(self.SL_general_map, SL_data)
 
                 SL_filt = self.construct_data(SL_filt_general, cancer_filt='all')
-
                 print("Processing", data_type, "size=", len(SL_filt))
 
                 if downstream_stat:

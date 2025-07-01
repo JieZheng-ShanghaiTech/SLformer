@@ -1,0 +1,19 @@
+EXPERIMENT_DIR: ./experiment
+SAVED_DATA_DIR: ./data/saved_data
+sc_dir: /data/xinliu/GeneSentence/TISCH2/
+
+SL_data_dir: ./data/SL_data
+
+task: 
+  type: inference
+  name: IDH1_MiSL_LAML
+  data:
+    laml: ./data/saved_data/MiSL_IDH1/MiSL_IDH1_processed_LAML.npy
+
+  model:
+    mix_1:
+      model_type: transformer
+      path: ./experiment/mix_all/transformer/2024-10-03-07:48:53
+    mix_2:
+      model_type: transformer
+      path: ./experiment/mix_all/transformer/2024-10-13-01:42:53

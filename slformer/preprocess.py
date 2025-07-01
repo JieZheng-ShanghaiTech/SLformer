@@ -40,7 +40,6 @@ class Data_Preprocess():
         }
 
 
-    def construct_dirs(self):
 
         for data_name, path in self.data_path_repository.items():
             if data_name != "sc_raw":
@@ -618,9 +617,9 @@ if __name__ == "__main__":
 
     # ===== add an additional cancer type =====
 
-    # data_preprocess.data_prepare_sc(additional=True)
+    data_preprocess.data_prepare_sc(additional=True)
     # data_preprocess.data_prepare_coexp(additional=True)
-    data_preprocess.data_prepare_genesent(sent_n=200, additional=True)
+    # data_preprocess.data_prepare_genesent(sent_n=200, additional=True)
 
     # data_preprocess.data_prepare_genesent(sent_n=200, additional=True, transform=False)
 

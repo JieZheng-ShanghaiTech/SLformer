@@ -1,0 +1,87 @@
+EXPERIMENT_DIR: ./experiment
+SAVED_DATA_DIR: ./data/saved_data
+sc_dir: /data/xinliu/GeneSentence/TISCH2/
+
+SL_data_dir: ./data/SL_data
+
+task: 
+  type: att
+  # name: IDH1_PRKDC_att
+  # primary_gene: IDH1
+  # partner_gene: PRKDC
+  # cancer: Glioma
+  name: BRCA_PARP_att
+  primary_gene: BRCA2
+  partner_gene: PARP1
+  cancer: BRCA
+  model:
+    model_no_0: ./experiment/mix_add_GBM/transformer/2024-11-27-19:11:44
+    model_no_1: ./experiment/mix_add_GBM/transformer/2024-11-28-01:48:27
+    model_no_2: ./experiment/mix_add_GBM/transformer/2024-11-27-20:46:51
+    model_no_3: ./experiment/mix_add_GBM/transformer/2024-11-27-18:52:43
+    model_no_4: ./experiment/mix_add_GBM/transformer/2024-11-28-07:21:39
+    model_no_5: ./experiment/mix_add_GBM/transformer/2024-11-28-07:35:55
+    model_no_6: ./experiment/mix_add_GBM/transformer/2024-11-27-20:11:33
+    model_no_7: ./experiment/mix_add_GBM/transformer/2024-11-28-09:54:08
+    model_no_8: ./experiment/mix_add_GBM/transformer/2024-11-28-08:50:49
+    model_no_9: ./experiment/mix_add_GBM/transformer/2024-11-28-02:51:31
+    model_no_10: ./experiment/mix_add_GBM/transformer/2024-11-28-03:21:50
+    model_no_11: ./experiment/mix_add_GBM/transformer/2024-11-28-08:07:09
+    model_no_12: ./experiment/mix_add_GBM/transformer/2024-11-28-11:30:19
+    model_no_13: ./experiment/mix_add_GBM/transformer/2024-11-27-22:36:49
+    model_no_14: ./experiment/mix_add_GBM/transformer/2024-11-27-23:21:16
+    model_no_15: ./experiment/mix_add_GBM/transformer/2024-11-28-10:32:45
+    model_no_16: ./experiment/mix_add_GBM/transformer/2024-11-27-19:30:38
+    model_no_17: ./experiment/mix_add_GBM/transformer/2024-11-27-14:13:14
+    model_no_18: ./experiment/mix_add_GBM/transformer/2024-11-27-21:57:52
+    model_no_19: ./experiment/mix_add_GBM/transformer/2024-11-28-02:03:54
+    model_no_20: ./experiment/mix_add_GBM/transformer/2024-11-27-14:41:28
+    model_no_21: ./experiment/mix_add_GBM/transformer/2024-11-28-08:23:47
+    model_no_22: ./experiment/mix_add_GBM/transformer/2024-11-28-00:10:48
+    model_no_23: ./experiment/mix_add_GBM/transformer/2024-11-27-19:52:12
+    model_no_24: ./experiment/mix_add_GBM/transformer/2024-11-27-01:14:48
+    model_no_25: ./experiment/mix_add_GBM/transformer/2024-11-28-12:22:23
+    model_no_26: ./experiment/mix_add_GBM/transformer/2024-11-28-04:27:19
+    model_no_27: ./experiment/mix_add_GBM/transformer/2024-11-28-13:18:16
+    model_no_28: ./experiment/mix_add_GBM/transformer/2024-11-28-07:50:25
+    model_no_29: ./experiment/mix_add_GBM/transformer/2024-11-28-05:31:40
+    model_no_30: ./experiment/mix_add_GBM/transformer/2024-11-28-06:45:00
+    model_no_31: ./experiment/mix_add_GBM/transformer/2024-11-28-03:51:05
+    model_no_32: ./experiment/mix_add_GBM/transformer/2024-11-27-12:48:59
+    model_no_33: ./experiment/mix_add_GBM/transformer/2024-11-27-06:20:27
+    model_no_34: ./experiment/mix_add_GBM/transformer/2024-11-27-16:31:18
+    model_no_35: ./experiment/mix_add_GBM/transformer/2024-11-28-09:17:10
+    model_no_36: ./experiment/mix_add_GBM/transformer/2024-11-27-06:04:19
+    model_no_37: ./experiment/mix_add_GBM/transformer/2024-11-28-02:34:38
+    model_no_38: ./experiment/mix_add_GBM/transformer/2024-11-27-17:10:36
+    model_no_39: ./experiment/mix_add_GBM/transformer/2024-11-27-02:56:25
+    model_no_40: ./experiment/mix_add_GBM/transformer/2024-11-27-21:20:17
+    model_no_41: ./experiment/mix_add_GBM/transformer/2024-11-28-01:03:26
+    model_no_42: ./experiment/mix_add_GBM/transformer/2024-11-27-10:53:42
+    model_no_43: ./experiment/mix_add_GBM/transformer/2024-11-27-04:21:08
+    model_no_44: ./experiment/mix_add_GBM/transformer/2024-11-27-08:56:48
+    model_no_45: ./experiment/mix_add_GBM/transformer/2024-11-27-02:19:04
+    model_no_46: ./experiment/mix_add_GBM/transformer/2024-11-27-00:25:55
+    model_no_47: ./experiment/mix_add_GBM/transformer/2024-11-27-07:46:57
+    model_no_48: ./experiment/mix_add_GBM/transformer/2024-11-27-15:18:44
+    model_no_49: ./experiment/mix_add_GBM/transformer/2024-11-27-12:29:54
+    model_no_50: ./experiment/mix_add_GBM/transformer/2024-11-28-02:18:15
+    model_no_51: ./experiment/mix_add_GBM/transformer/2024-11-28-04:53:34
+    model_no_52: ./experiment/mix_add_GBM/transformer/2024-11-27-00:44:40
+    model_no_53: ./experiment/mix_add_GBM/transformer/2024-11-28-06:03:56
+    model_no_54: ./experiment/mix_add_GBM/transformer/2024-11-27-13:44:37
+    model_no_55: ./experiment/mix_add_GBM/transformer/2024-11-27-11:42:27
+    model_no_56: ./experiment/mix_add_GBM/transformer/2024-11-27-01:42:37
+    model_no_57: ./experiment/mix_add_GBM/transformer/2024-11-27-13:24:43
+    model_no_58: ./experiment/mix_add_GBM/transformer/2024-11-27-13:07:24
+    model_no_59: ./experiment/mix_add_GBM/transformer/2024-11-27-18:03:26
+    model_no_60: ./experiment/mix_add_GBM/transformer/2024-11-27-07:17:56
+    model_no_61: ./experiment/mix_add_GBM/transformer/2024-11-27-08:18:13
+    model_no_62: ./experiment/mix_add_GBM/transformer/2024-11-27-00:08:14
+    model_no_63: ./experiment/mix_add_GBM/transformer/2024-11-27-05:12:13
+    model_no_64: ./experiment/mix_add_GBM/transformer/2024-11-27-10:09:33
+    model_no_65: ./experiment/mix_add_GBM/transformer/2024-11-27-06:58:43
+    model_no_66: ./experiment/mix_add_GBM/transformer/2024-11-27-15:55:04
+    model_no_67: ./experiment/mix_add_GBM/transformer/2024-11-27-09:29:33
+    model_no_68: ./experiment/mix_add_GBM/transformer/2024-11-27-06:37:55
+    model_no_69: ./experiment/mix_add_GBM/transformer/2024-11-27-03:40:56
