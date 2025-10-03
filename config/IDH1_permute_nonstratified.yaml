@@ -4,6 +4,7 @@ sc_dir: /data/xinliu/GeneSentence/TISCH2/
 SL_data_dir: ./data/SL_data
 task:
   type: IDH1_permute_inference_nonstratified
+  primary_gene: IDH1
   cancer: Glioma
   # cancer: SKCM
   # name: DDR_14th

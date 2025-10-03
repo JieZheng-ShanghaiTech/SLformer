@@ -15,7 +15,7 @@ from util import stat_indep_test, get_train_test_SL
 from train import train, pretrain
 from model import MLP, Transformer_Finetuner, Transformer_Pretrain
 from dataloader import load_train_data_SL, load_all_data_SL, load_pretrain_data, load_pretrain_data_all
-from prepare_data import filt_SL_test_names, IDH1_permute_data
+from prepare_data import filt_SL_test_names, single_permute_data
 
 
 
@@ -900,7 +900,7 @@ class Validation_Experiment():
                     elif model_cfg.model_type == 'transformer':
                         model = Transformer_Finetuner(config=transformer_config)
                     
-                    predict_res, _, _, primary_gene, partner_gene = SL_test_prim_partner(device=self.args.device, model=model,
+                    predict_res, _, cancer, primary_gene, partner_gene = SL_test_prim_partner(device=self.args.device, model=model,
                         pretrain_file=os.path.join(model_cfg.path, "model", model_savename),
                         data_loader=loader,
                         gene2id_map=self.gene2id_map,
@@ -908,6 +908,7 @@ class Validation_Experiment():
                     )
 
                     result_df = pd.DataFrame(data=predict_res.reshape(-1,1), columns=["score"])
+                    result_df.insert(loc=0, column='cancer', value=cancer)
                     result_df.insert(loc=0, column='partner_gene', value=partner_gene)
                     result_df.insert(loc=0, column='primary_gene', value=primary_gene)
                     # result_df = result_df.sort_values(by=["score"],ascending=False).reset_index()
@@ -917,18 +918,18 @@ class Validation_Experiment():
                     # att_cross_all.append(att_cross)
                     # att_transformer_all.append(att_transformer)
 
-                df_concat = pd.concat(df_all)
-                avg_score_mean = df_concat.groupby('partner_gene')['score'].mean().reset_index()
-                avg_score_mean = avg_score_mean.sort_values(by=["score"],ascending=False).reset_index()
-                # avg_score_mean.to_csv(os.path.join(output_dir, f"{scenario}_{data_name}.csv"), index=False)
-
                 ## keep all the 5 folds results, remember to comment the line sorting result_df
-                merged_df = df_all[0][['primary_gene', 'partner_gene']].copy()
+                merged_df = df_all[0][['primary_gene', 'partner_gene', 'cancer']].copy()
                 for i, df in enumerate(df_all):
                     merged_df[f'score_{i+1}'] = df['score']
-                merged_df['avg_score'] = merged_df.iloc[:, 2:].mean(axis=1)
+                merged_df['avg_score'] = merged_df.iloc[:, 3:].mean(axis=1)
                 merged_df.to_csv(os.path.join(output_dir, f"{scenario}_{data_name}_5folds.csv"), index=False)
 
+                ## sort by prediction scores
+                # df_concat = pd.concat(df_all)
+                # avg_score_mean = df_concat.groupby('partner_gene')['score'].mean().reset_index()
+                # avg_score_mean = avg_score_mean.sort_values(by=["score"],ascending=False).reset_index()
+                # avg_score_mean.to_csv(os.path.join(output_dir, f"{scenario}_{data_name}.csv"), index=False)
 
                 # avg_PRKDC_rank = str(avg_score_mean[avg_score_mean['partner_gene']=='PRKDC'].index[0])+' / '+str(len(avg_score_mean))
                 # print("avg", data_name, scenario, avg_PRKDC_rank)
@@ -1022,6 +1023,7 @@ class Validation_Experiment():
         output_dir = os.path.join(self.config.EXPERIMENT_DIR, "inference", self.config.task.type, self.config.task.name)
         create_dir(output_dir)
 
+        prim_gene = self.config.task.primary_gene
         cancer_id = self.cancer2id_map[cancer]
         ## load gene list
         genelist_path = self.config.task.gene_list
@@ -1032,6 +1034,7 @@ class Validation_Experiment():
             genelist.append("BCL2L1"); genelist.append("NUDT1")
         genes_filt = filt_SL_test_names(genelist, self.gene2id_map, self.gene_sent_map, self.geneformer_emb_map, context=cancer_id)
         print(f"#genes left: {len(genes_filt)}")
+        assert len(genelist)>=1
 
         res_all = []
         for i, partner_candidate in enumerate(genes_filt):
@@ -1040,7 +1043,7 @@ class Validation_Experiment():
                 print(i*(n_iter+1)+iter)
                 ## sample data for each iteration
                 # data_iter = IDH1_permute_data(self.common_data, partner_candidate, n_sample, seed=i, cancer=cancer)
-                data_iter = IDH1_permute_data(self.common_data, partner_candidate, n_sample, seed=i*(n_iter+1)+iter, cancer=cancer)
+                data_iter = single_permute_data(self.common_data, prim_gene, partner_candidate, n_sample, seed=i*(n_iter+1)+iter, cancer=cancer)
                 if len(data_iter) > 512:    ## maximumly take 512 pairs
                     data_iter = data_iter[:512,:]
 
@@ -1174,8 +1177,67 @@ class Validation_Experiment():
                     pkl.dump(emb_cross_all, f)
                 with open(os.path.join(output_dir, f"{scenario}_transformeremb.pkl"), 'wb') as f:
                     pkl.dump(emb_transformer_all, f)
+        
 
+    def get_emb(self):
 
+        output_dir = os.path.join(self.config.EXPERIMENT_DIR, self.experiment, self.config.task.name, self.config.task.cancer)
+        create_dir(output_dir)
+
+        model_dirs = self.config.task.model
+        # data = np.load(self.config.task.data)
+        partner_gene = self.config.task.partner_gene
+        cancer_id = self.cancer2id_map[self.config.task.cancer]
+        data_all = np.array([[self.gene2id_map[self.config.task.primary_gene], self.gene2id_map[partner_gene], 1, cancer_id]])
+
+        device=self.args.device
+
+        for scenario, model_cfg in model_dirs.items():
+            
+            print(scenario)
+            ## set model parameters
+            with open(os.path.join(model_cfg, 'params.json'), 'r') as f:
+                model_params = json.load(f)
+            for arg in vars(self.args):
+                if arg in model_params:
+                    setattr(self.args, arg, model_params[arg])
+            transformer_config = self.config_transformer(self.args)
+            loader = load_all_data_SL(data_all, self.gene_sent_map, 1, self.args.n, bi_rpr=True, sent_mask=self.sent_mask_map, emb_mtx=self.geneformer_emb_mtx, add_kg=self.args.add_kg)
+
+            emb_cross_all = []
+            emb_transformer_all = []
+
+            for model_savename in os.listdir(os.path.join(model_cfg, "model")):
+
+                pretrain_file=os.path.join(model_cfg, "model", model_savename)
+                model = Transformer_Finetuner(config=transformer_config)
+                params_pretrain = torch.load(pretrain_file)
+                model.load_state_dict(params_pretrain, strict=True)
+                for p in model.parameters():
+                    p.requires_grad = False
+                model = model.to(device)
+                model.eval()
+
+                for i, data in enumerate(loader):
+                    sent1, mask1, sent2, mask2, label, g1, g2, cancer = data
+                    sent1_cuda = sent1.to(device)
+                    sent2_cuda = sent2.to(device)
+                    mask1_cuda = mask1.to(device)
+                    mask2_cuda = mask2.to(device)
+
+                    h_total, fusion_output = model.output_emb(sent1_cuda, mask1_cuda, sent2_cuda, mask2_cuda)
+                    # h_total[0], h_total[1]
+                    if len(fusion_output[0]) > 0:
+                        emb_cross_all.append(torch.cat(fusion_output).detach().cpu().numpy())
+                    emb_transformer_all.append(torch.cat(h_total, dim=1).detach().cpu().numpy())
+
+            print(len(emb_cross_all))
+            print(len(emb_transformer_all))
+            with open(os.path.join(output_dir, f"{scenario}_crossemb.pkl"), 'wb') as f:
+                pkl.dump(emb_cross_all, f)
+            with open(os.path.join(output_dir, f"{scenario}_transformeremb.pkl"), 'wb') as f:
+                pkl.dump(emb_transformer_all, f)
+                
 
 def SL_test_prim_partner(device, model, pretrain_file, data_loader, gene2id_map, cancer2id_map, output_att=False, output_emb=False):
 

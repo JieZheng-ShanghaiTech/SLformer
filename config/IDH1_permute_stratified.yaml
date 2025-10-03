@@ -4,6 +4,7 @@ sc_dir: /data/xinliu/GeneSentence/TISCH2/
 SL_data_dir: ./data/SL_data
 task:
   type: IDH1_permute_inference_stratified
+  primary_gene: IDH1
   gene_list: ./data/DDR_genelist/reactome_dna_repair.txt
 model:
   model_no_0: ./experiment/mix_add_GBM_stratified/transformer/2025-03-04-01:19:23

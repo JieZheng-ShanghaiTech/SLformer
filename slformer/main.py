@@ -15,7 +15,7 @@ parser.add_argument('--data_config_file', type=str, default="./config/data_prepr
                     help='data preprocess config file path')
 # parser.add_argument('--config_file', type=str, default="./config/mix.yaml",
 #                     help='config file path')
-parser.add_argument('--config_file', type=str, default="./config/all_inference.yaml",
+parser.add_argument('--config_file', type=str, default="./config/get_emb_IDH1_PRKDC.yaml",
                     help='config file path')
 # parser.add_argument('--config_file', type=str, default="config/IDH1_permute.yaml",
 #                     help='config file path')
@@ -151,19 +151,22 @@ elif "cancer_specific" in args.config_file or "mix" in args.config_file or "cros
 
 
 # elif "IDH1_inference" in args.config_file:
-elif "IDH1_inference" in args.config_file or "PTEN_inference" in args.config_file:
+elif "IDH1_inference" in args.config_file or "PTEN_inference" in args.config_file or "PRMT5_MAT2A_inference" in args.config_file or "IDH1_PRKDC_inference" in args.config_file:
     ### Infer IDH1-PRKDC
     experiment_set.infer_primpartner()
 
 
-elif "IDH1_permute" in args.config_file:
+elif "IDH1_permute" in args.config_file or "PRMT5_MAT2A_permute" in args.config_file:
     ## IDH1 random permute
     # experiment_set.permut_primpartner(n_sample=1000, 
     #                                 model_path="./experiment/mix_add_GBM/transformer/2024-11-28-11:30:19", 
     #                                 model_type='transformer', cancer='Glioma')
     cancer = config.task.cancer
     for name, model_path in config.model.items():
-        experiment_set.permut_primpartner(n_sample=1000, n_iter=20,
+        # experiment_set.permut_primpartner(n_sample=1000, n_iter=20,
+        #                             model_path=model_path, savename=name, 
+        #                             model_type='transformer', cancer=cancer)
+        experiment_set.permut_primpartner(n_sample=1000, n_iter=10,
                                     model_path=model_path, savename=name, 
                                     model_type='transformer', cancer=cancer)
 
@@ -182,6 +185,9 @@ elif "all_inference" in args.config_file:
 
 elif "att" in args.config_file:
     experiment_set.get_att()
+
+elif "emb" in args.config_file:
+    experiment_set.get_emb()
 
 elif "fewshot" in args.config_file:
     # experiment_set.fewshot_train()

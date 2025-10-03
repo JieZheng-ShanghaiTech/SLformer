@@ -9,10 +9,14 @@ task:
   # primary_gene: IDH1
   # partner_gene: PRKDC
   # cancer: Glioma
-  name: BRCA_PARP_att_50_LUAD
-  primary_gene: BRCA2
-  partner_gene: PARP1
-  cancer: SKCM
+  # name: BRCA_PARP_att_50_LUAD
+  # primary_gene: BRCA2
+  # partner_gene: PARP1
+  # cancer: SKCM
+  name: KRAS_TBK1_att_50_LUAD
+  primary_gene: KRAS
+  partner_gene: TBK1
+  cancer: LUAD
   model:
     model_no_0: experiment/mix_add_GBM/transformer/50len/2025-06-14-20:51:01
     model_no_1: experiment/mix_add_GBM/transformer/50len/2025-06-15-06:25:58

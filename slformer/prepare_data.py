@@ -31,8 +31,6 @@ def save_train_test_data(config, common_data):
             common_data=common_data,
             type="general"
         )
-        if cancer_type == "Glioma":
-            print()
         for cv in range(1,6):
             data_test, data_train = get_train_test_SL(data_total, cv=cv, data_all=False, return_idx=False)
             np.save(os.path.join(save_dir, f"test_{cancer_type}_fold_{cv}.npy"), data_test)
@@ -95,7 +93,6 @@ def save_mix_add_GBM_data(config, common_data):
                 filt_gbm_data.append([g1_idx, g2_idx, GBM_data[i, 2], 8])
     print("size of filt GBM data:", len(filt_gbm_data))
     filt_gbm_data = np.array(filt_gbm_data)
-
     save_dir = os.path.join(config.SAVED_DATA_DIR, "SL_train_test_data", "mix_add_GBM_stratified")
     create_dir(save_dir)
 
@@ -105,6 +102,26 @@ def save_mix_add_GBM_data(config, common_data):
         data_test = np.concatenate((data_test_ori, data_test_glioma), axis=0)
         data_train = np.concatenate((data_train_ori, data_train_glioma), axis=0)
 
+        np.save(os.path.join(save_dir, f"test_all_fold_{cv}.npy"), data_test)
+        np.save(os.path.join(save_dir, f"train_all_fold_{cv}.npy"), data_train)
+
+
+def save_mix_subset_data(config, common_data, cancers):
+    ## cancers is a list of cancer types and does not include Glioma
+    cancer_types = cancers
+    cancer_types.sort()
+    save_dir = os.path.join(config.SAVED_DATA_DIR, "SL_train_test_data", f"mix_{'_'.join(cancer_types)}")
+    create_dir(save_dir)
+    
+    data = prepare_SL_data(
+        config=config,
+        cancer=cancer_types,
+        common_data=common_data,
+        type="general"
+    )
+    print('data size', len(data))
+    for cv in range(1,6):
+        data_test, data_train = get_train_test_SL(data, test_size=0.2, cv=cv, data_all=False, return_idx=False)
         np.save(os.path.join(save_dir, f"test_all_fold_{cv}.npy"), data_test)
         np.save(os.path.join(save_dir, f"train_all_fold_{cv}.npy"), data_train)
 
@@ -403,8 +420,51 @@ def prepare_PTEN_GBM_data(common_data, cancer="Glioma"):
     np.save(os.path.join(save_dir, f"PTEN_{cancer}_allgenes.npy"), np.array(data_all))
 
 
+def prepare_PRMT5_MAT2A_data(common_data):
 
-def IDH1_permute_data(common_data, partner_candidate, n_sample=100, seed=0, cancer="Glioma"):
+    save_dir = "./data/saved_data/inference"
+    create_dir(save_dir)
+
+    gene_sent_map = common_data["gene2sent_map"]
+    geneformer_emb_map=common_data["geneformer_emb_map"]
+    gene2id_map = common_data["gene2id_map"]
+
+    geneid1 = gene2id_map["MAT2A"]; geneid2 = gene2id_map["PRMT5"]
+
+    data_all = []
+    for cancer_id in range(9):
+        ## check if both genes are accessible
+        genes_filt = filt_SL_test(["PRMT5", "MAT2A"], gene2id_map, gene_sent_map, geneformer_emb_map, context=cancer_id)
+        if len(genes_filt) >= 2:
+            print(cancer_id)    ## 0,1,2,5,6,7,8
+            data_all.append([geneid1, geneid2, 0, cancer_id]) ## dummpy label
+
+    np.save(os.path.join(save_dir, f"PRMT5_MAT2A_allcancer.npy"), np.array(data_all))
+
+
+def prepare_IDH1_PRKDC_data(common_data):
+
+    save_dir = "./data/saved_data/inference"
+    create_dir(save_dir)
+
+    gene_sent_map = common_data["gene2sent_map"]
+    geneformer_emb_map=common_data["geneformer_emb_map"]
+    gene2id_map = common_data["gene2id_map"]
+
+    geneid1 = gene2id_map["IDH1"]; geneid2 = gene2id_map["PRKDC"]
+
+    data_all = []
+    for cancer_id in range(9):
+        ## check if both genes are accessible
+        genes_filt = filt_SL_test(["IDH1", "PRKDC"], gene2id_map, gene_sent_map, geneformer_emb_map, context=cancer_id)
+        if len(genes_filt) >= 2:
+            print(cancer_id)    ## 0,1,2,5,6,7,8
+            data_all.append([geneid1, geneid2, 0, cancer_id]) ## dummpy label
+
+    np.save(os.path.join(save_dir, f"IDH1_PRKDC_allcancer.npy"), np.array(data_all))
+
+
+def single_permute_data(common_data, primary_gene, partner_candidate, n_sample=100, seed=0, cancer="Glioma"):
 
     gene_sent_map = common_data["gene2sent_map"]
     geneformer_emb_map=common_data["geneformer_emb_map"]
@@ -424,7 +484,7 @@ def IDH1_permute_data(common_data, partner_candidate, n_sample=100, seed=0, canc
     test_genes_filt = [gene2id_map[partner_candidate]]+test_genes_filt
     data_all = []
     for g in test_genes_filt:
-        data_all.append([gene2id_map['IDH1'], g, 0, cancer_id])
+        data_all.append([gene2id_map[primary_gene], g, 0, cancer_id])
     
     return np.array(data_all)
 
@@ -626,6 +686,10 @@ if __name__ == "__main__":
     ## save SL data for few shot test
     # save_fewshot_test_data(config, common_data)
 
+    ## save SL data for few mixed cancer types
+    save_mix_subset_data(config, common_data, cancers=['CESC','LUAD'])
+    save_mix_subset_data(config, common_data, cancers=['COAD','LUAD','OV'])
+
     ### save ELISL benchmark data
     # prepare_ELISL_data(config, common_data, ELISL_data_dir="./data/benchmark/ELISL_data")
 
@@ -643,7 +707,13 @@ if __name__ == "__main__":
     # prepare_MiSL_IDH1_data(cancer='LAML')
 
     ## PTEN-SL in GBM
-    prepare_PTEN_GBM_data(common_data, cancer="Glioma")
+    # prepare_PTEN_GBM_data(common_data, cancer="Glioma")
+
+    ## MAT2A-PRMT5 in all cancers
+    # prepare_PRMT5_MAT2A_data(common_data)
+
+    ## single IDH1-PRKDC pair in all cancers
+    # prepare_IDH1_PRKDC_data(common_data)
 
     ### save SL independent test data
         

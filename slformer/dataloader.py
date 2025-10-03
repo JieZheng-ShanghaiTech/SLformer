@@ -115,17 +115,6 @@ class SL_Loader():
 
             if data_type == "general":
                 SL_general_data = self.construct_data(self.SL_general_df, cancer_filt)
-                ## additionally add GBM data
-                # GBM_data = np.load("./data/saved_data/GBM_SL/GBM_SL.npy")
-                # filt_data = []
-                # for i in range(len(GBM_data)):
-                #     g1_idx = GBM_data[i, 0]
-                #     g2_idx = GBM_data[i, 1]
-                #     if g1_idx in self.gene_emb_map[8] and g2_idx in self.gene_emb_map[8]:
-                #         if g1_idx in self.geneformer_emb_map[8] and g2_idx in self.geneformer_emb_map[8]:
-                #             filt_data.append([g1_idx, g2_idx, GBM_data[i, 2], 8])
-                # print("size of filt GBM data:", len(filt_data))
-                # SL_general_data = np.concatenate((SL_general_data, filt_data), axis=0)
                 
                 return SL_general_data
             

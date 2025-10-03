@@ -6,6 +6,7 @@
 /preprocess.ipynb
 /SL_downstream.ipynb
 /IDH1_analysis.ipynb
+/config
 /config/cancer_specific
 /config/cancer_specific2.yaml
 /emb_plot.ipynb
