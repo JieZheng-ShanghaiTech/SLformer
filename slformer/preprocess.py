@@ -25,7 +25,7 @@ class Data_Preprocess():
         config
     ):
         self.config = config
-        print(config)
+        # print(config)
         self.data_path_repository = {
             "sc_raw": os.path.join(self.config.sc_dir, "raw"),
             "sc_processed": os.path.join(self.config.sc_dir, "processed"),
