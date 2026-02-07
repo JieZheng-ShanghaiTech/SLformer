@@ -1,26 +1,34 @@
-
 EXPERIMENT_DIR: ./experiment
 SAVED_DATA_DIR: ./data/saved_data
-
 sc_dir: /data/xinliu/GeneSentence/TISCH2/
-Geneformer_dir: ../GeneFormer
-geneformer_gene_info_path: ../GeneFormer/gene_info_table.csv
 
 SL_data_dir: ./data/SL_data
 
-sc_samples:
-  KIRC: KIRC_GSE159115
-  COAD: CRC_EMTAB8107
-  LAML: AML_GSE116256
-  OV: OV_EMTAB8107
-  BRCA: BRCA_GSE148673
-  CESC: CESC_GSE168652
-  SKCM: SKCM_GSE72056
-  LUAD: NSCLC_GSE127465
-
-add_sc_samples:
-  Glioma: Glioma_GSE138794
-
+task: 
+  # type: independent_test
+  type: independent_test_on_mix
+  model:
+    mix:
+      model_type: transformer
+      path: path_to_model
+    CESC:
+      model_type: transformer
+      path: path_to_model
+    OV:
+      model_type: transformer
+      path: path_to_model
+    LAML:
+      model_type: transformer
+      path: path_to_model
+    LUAD:
+      model_type: transformer
+      path: path_to_model
+    COAD:
+      model_type: transformer
+      path: path_to_model
+    SKCM:
+      model_type: transformer
+      path: path_to_model
 
 SL_dataset:
   general:
@@ -43,15 +51,22 @@ SL_dataset:
     label_type: rank
   primpartner_study3_OV: 
     path: ./data/SL_data/processed/SLlabel_primpartner_study3_OV.csv
-    context: mix
+    context: OV
     label_type: rank
   paralog_study1_score:
     path: ./data/SL_data/processed/SLlabel_paralog_study1_score.csv
     context: mix
+    context_all: 
+      - CESC
+      - LUAD
     label_type: rank
   paralog_study2_score: 
     path: ./data/SL_data/processed/SLlabel_paralog_study2_score.csv
     context: mix
+    context_all: 
+      - COAD
+      - LUAD
+      - OV
     label_type: rank
   paralog_study3: 
     path: ./data/SL_data/processed/SLlabel_paralog_study3_binary.csv

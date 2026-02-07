@@ -1,0 +1,17 @@
+
+EXPERIMENT_DIR: ./experiment
+SAVED_DATA_DIR: ./data/saved_data
+sc_dir: /data/xinliu/GeneSentence/TISCH2/
+
+SL_data_dir: ./data/SL_data
+
+model_type: transformer ## "geneformer" or "transformer"
+
+task:
+  type: cancer_specific
+  cancer: [KIRC, COAD, LAML, OV, BRCA, CESC, SKCM, LUAD]
+
+SL_dataset:
+  general:
+    path: ./data/SL_data/raw/SLlabel_general.xlsx
+

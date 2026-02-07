@@ -14,8 +14,8 @@ from datasets import load_from_disk
 from datasets import Dataset
 
 from util import create_dir
-from dataset import get_gene_sent_map
 
+import sys
 
 
 class Data_Preprocess():
@@ -25,7 +25,6 @@ class Data_Preprocess():
         config
     ):
         self.config = config
-        # print(config)
         self.data_path_repository = {
             "sc_raw": os.path.join(self.config.sc_dir, "raw"),
             "sc_processed": os.path.join(self.config.sc_dir, "processed"),
@@ -34,11 +33,7 @@ class Data_Preprocess():
             "coexp_data": os.path.join(self.config.sc_dir, "coexp_data"),
             "coexp_graph": os.path.join(self.config.sc_dir, "coexp_graph"),
             "genesent_root": os.path.join(self.config.sc_dir, "gene_sentence"),
-            # "go_anno_df": os.path.join("./data", "GO", "go_anno_popular.csv")
-            "go_anno_df": os.path.join("/home/jienihu/sc/SLformer/data", "GO", "go_anno_popular.csv")
-            # "go_anno_df": os.path.join("./data", "GO", "go_anno_gosemsim.csv")
         }
-
 
 
         for data_name, path in self.data_path_repository.items():
@@ -51,24 +46,20 @@ class Data_Preprocess():
     
 
     def get_common_data(self, sent_n):
-        # print(self.data_path_repository, sent_n)
-        # common_data_path = {
-        #     "geneformer_emb_map": os.path.join(self.data_path_repository["map"], "geneformer_emb.pkl"),
-        #     "geneformer_emb_mtx": os.path.join(self.data_path_repository["emb"], "geneformer_emb.npy"),
-        #     "gene2sent_map": os.path.join(self.data_path_repository["map"], f"gene2sent_n{sent_n}.pkl"),
-        #     "sent_mask_map": os.path.join(self.data_path_repository["map"], f"sent_mask_n{sent_n}.pkl"),
-        #     "gene2id_map": os.path.join(self.data_path_repository["map"], "gene2id.pkl"),
-        #     # "cancer_list": os.path.join(self.data_path_repository["map"], "cancer_list.txt"),
-        # }
+        """
+        A shortcut to fetch processed data
+        args:
+            sent_n: length of gene sentence data that has been saved
+        """
+
         common_data_path = {
-            'geneformer_emb_map': '/home/jienihu/sc/SLformer/data/saved_data/map/geneformer_emb.pkl', 
-            'geneformer_emb_mtx': '/home/jienihu/sc/SLformer/data/saved_data/emb/geneformer_emb.npy', 
-            "gene2sent_map": f"/home/jienihu/sc/SLformer/data/saved_data/map/gene2sent_n{sent_n}.pkl",
-            "sent_mask_map": f"/home/jienihu/sc/SLformer/data/saved_data/map/sent_mask_n{sent_n}.pkl",
-            "gene2id_map": "/home/jienihu/sc/SLformer/data/saved_data/map/gene2id.pkl",
+            'geneformer_emb_map': 'data/saved_data/map/geneformer_emb.pkl', 
+            'geneformer_emb_mtx': 'data/saved_data/emb/geneformer_emb.npy', 
+            "gene2sent_map": f"data/saved_data/map/gene2sent_n{sent_n}.pkl",
+            "sent_mask_map": f"data/saved_data/map/sent_mask_n{sent_n}.pkl",
+            "gene2id_map": "data/saved_data/map/gene2id.pkl",
         }
-        
-        # print(common_data_path)
+    
         for data, path in common_data_path.items():
             if not os.path.exists(path):
                 raise Exception(f"{data,path} cannot be found, please first construct it.")
@@ -78,15 +69,10 @@ class Data_Preprocess():
             with open(common_data_path[data], 'rb') as f:
                 common_data[data] = pkl.load(f)
         common_data["geneformer_emb_mtx"] = np.load(common_data_path["geneformer_emb_mtx"])
-        
 
         cancer_list = list(self.config.sc_samples.keys())
         if "add_sc_samples" in self.config and len(self.config.add_sc_samples)>0:
             full_cancer_list = cancer_list + list(self.config.add_sc_samples.keys())
-
-        # with open(os.path.join(self.data_path_repository["map"], "cancer_list.txt")) as f:
-        #     cancer_list = [line.rstrip('\n') for line in f]
-        if "add_sc_samples" in self.config and len(self.config.add_sc_samples)>0:
             cancer2id_map = {c:i for i,c in enumerate(full_cancer_list)}
         else:
             cancer2id_map = {c:i for i,c in enumerate(cancer_list)}
@@ -94,15 +80,14 @@ class Data_Preprocess():
         common_data["cancer_list"] = cancer_list
         common_data["cancer2id_map"] = cancer2id_map
 
-        go_anno = pd.read_csv(self.data_path_repository["go_anno_df"])
-        gene2go_map = dict(zip(go_anno["gene_id"], go_anno["GO_id"]))
-        # gene2go_map = dict(zip(go_anno["gene_id"], go_anno["annotation"]))
-        common_data["gene2go_map"] = gene2go_map
-
         return common_data
     
 
     def data_prepare_sc(self, additional=False):
+        """
+        First step of preprocessing single-cell expression data
+        Also save involved cancer and gene information
+        """
 
         if not additional:
             cancer_list = list(self.config.sc_samples.keys())
@@ -145,6 +130,9 @@ class Data_Preprocess():
                     with open(os.path.join(self.data_path_repository["map"], "gene_list.txt"), 'w') as fp:
                         for g in list(gene_list):
                             fp.write("%s\n" % g)
+                else:
+                    with open(os.path.join(self.data_path_repository["map"], "gene_list.txt")) as f:
+                        gene_list = [line.strip() for line in f]
                 gene2id_map = {g:i for i, g in enumerate(gene_list)}
                 with open(os.path.join(self.data_path_repository["map"], "gene2id.pkl"), 'wb') as f:
                     pkl.dump(gene2id_map, f)
@@ -173,9 +161,12 @@ class Data_Preprocess():
                     adata_subset.write_h5ad(os.path.join(self.data_path_repository["sc_processed"],f"{cancer}_expression.h5ad"))
             
         print("sc data processing is complete!")
-    
 
+    
     def data_prepare_coexp(self, additional=False):
+        """
+        Computing co-expression graphs using processed single-cell data
+        """
 
         if not additional:
             cancer_list = list(self.config.sc_samples.keys())
@@ -198,15 +189,71 @@ class Data_Preprocess():
                                   gene_list_file=os.path.join(self.data_path_repository["map"], "gene_list.txt"), 
                                   percentile=99)
 
-        # geneformer emb map
+    def data_prepare_geneformer(self, additional=False):
+
+        ## obtain geneformer embeddings
+        if self.config.Geneformer_dir not in sys.path:
+            sys.path.insert(0, self.config.Geneformer_dir)
+        from geneformer import TranscriptomeTokenizer
+        from geneformer import EmbExtractor
+
+        tk = TranscriptomeTokenizer(
+            {"cancer": "cancer"},
+            nproc=16,
+            gene_median_file=os.path.join(self.config.Geneformer_dir, "geneformer/gene_median_dictionary.pkl"),
+            token_dictionary_file=os.path.join(self.config.Geneformer_dir, "geneformer/token_dictionary.pkl")
+        )
+
+        geneformer_dataset_fp = os.path.join(tisch_dir, "geneformer_tokenized/cancer_tokenized.dataset")
+        if os.path.exists(geneformer_dataset_fp):
+            print("GeneFormer tokenized data exists, skipping.")
+        else:
+            tisch_dir = self.config.sc_dir
+            tk.tokenize_data(
+                data_directory=self.data_path_repository["sc_processed"],
+                output_directory=os.path.join(tisch_dir, "geneformer_tokenized"),
+                output_prefix="cancer_tokenized",
+                file_format="h5ad"
+            )
+
         if additional:
-            cancer_list_origin = list(self.config.sc_samples.keys())
-            cancer_list_full = cancer_list_origin+cancer_list
-            cancer_list = cancer_list_full
+            cancer_list = (
+                list(self.config.sc_samples.keys()) +
+                list(self.config.add_sc_samples.keys())
+            )
+        else:
+            cancer_list = list(self.config.sc_samples.keys())
+
+        if os.path.exists(os.path.join(tisch_dir, "geneformer_emb")):
+            print("GeneFormer embedding data exists, skipping.")
+        else:
+            cancer_list = list(self.config.sc_samples.keys())
+            for cancer in cancer_list:
+                embex = EmbExtractor(
+                    model_type="Pretrained",
+                    num_classes=3,
+                    emb_mode="gene",
+                    filter_data={"cancer": [cancer]},
+                    max_ncells=1000,
+                    emb_layer=-1,
+                    forward_batch_size=20,
+                    nproc=16
+                )
+                
+                embex.extract_embs(
+                    model_directory=os.path.join(self.config.Geneformer_dir, "geneformer-6L"),
+                    input_data_file=os.path.join(
+                        tisch_dir,
+                        "geneformer_tokenized/cancer_tokenized.dataset"
+                    ),
+                    output_directory=os.path.join(tisch_dir, "geneformer_emb"),
+                    output_prefix=cancer
+                )
         
+        # geneformer emb map
         print("Start integrating geneformer embs...")
         emb_loader = GeneformerEmb_Loader(
-            emb_dir=self.config.geneformer_emb_dir,
+            emb_dir=os.path.join(tisch_dir, "geneformer_emb"),
             cancer_list=cancer_list,
             gene2ensembl_file=os.path.join(self.data_path_repository["map"], "gene2ensembl.pkl"),
             gene2id_file=os.path.join(self.data_path_repository["map"], "gene2id.pkl"),
@@ -248,6 +295,9 @@ class Data_Preprocess():
 
 
 def sc_preprocess(cancer, sample, sc_dir):
+    """
+    Extract single cells with malignant cancer cell annotations
+    """
 
     f_h5 = sample+"_expression.h5"
     f_meta = sample+"_CellMetainfo_table.tsv"
@@ -364,6 +414,29 @@ def construct_gene_sent(data_path_repository, cancer_list, sent_n, transform):
     return gene_sent_map, sent_mask_map
 
 
+
+def get_gene_sent_map(dataset, return_mask=True):
+
+    gene_sent_map = {}
+    sent_mask_map = {}
+
+    for i in range(len(dataset)):
+        root_gene = dataset[i]['root_gene']
+        input_ids = dataset[i]['input_ids']
+        att_mask = dataset[i]['attention_mask']
+        context = dataset[i]['cancer']
+
+        if context not in gene_sent_map:
+            gene_sent_map[context] = {}
+            sent_mask_map[context] = {}
+        if root_gene not in gene_sent_map[context]:
+            gene_sent_map[context][root_gene] = input_ids
+            sent_mask_map[context][root_gene] = att_mask
+
+    if return_mask:
+        return gene_sent_map, sent_mask_map
+    else:
+        return gene_sent_map 
 
 
 
@@ -493,10 +566,8 @@ def padding_genesentence(gene_list, max_length, padding_id=0):
 def padding_genesentence_transform(gene_list, cancer, ngene, max_length, padding_id=0):
 
     # idx for each gene is further transformed to adapt to the multi-cancer embedding
-    try:
-        sentence = [(g+1)+cancer*(ngene+1) for g in gene_list]
-    except:
-        print(gene_list, cancer, ngene)
+    sentence = [(g+1)+cancer*(ngene+1) for g in gene_list]
+
     if len(sentence) >= max_length:
         sentence = sentence[:max_length]
         att_mask = [1]*max_length
@@ -584,44 +655,33 @@ class GeneformerEmb_Loader():
         return np.array(emb_data)
     
 
+def main(config):
+
+    data_preprocess = Data_Preprocess(config)
+
+    # preprocess single-cell data (TISCH2 data)
+    data_preprocess.data_prepare_sc()
+    # prepare geneformer embeddings
+    data_preprocess.data_prepare_geneformer()
+    # preprocess and prepare co-expression data
+    data_preprocess.data_prepare_coexp()
+    # preprocess and prepare gene sentence data
+    data_preprocess.data_prepare_genesent(sent_n=200)
+
+
 
 if __name__ == "__main__":
 
     parser = argparse.ArgumentParser(description='Data Preprocess')
-
     parser.add_argument('--config_file', type=str, default="./config/data_preprocess.yaml",
                         help='config file path')
-    
     args = parser.parse_args()
-
 
     with open(args.config_file, 'r') as f:
         config = easydict.EasyDict(yaml.safe_load(f))
 
-    data_preprocess = Data_Preprocess(config)
+    main(config)
 
-    data_preprocess.construct_dirs()
-
-    # # preprocess single-cell data (TISCH2 data as an example)
-    # data_preprocess.data_prepare_sc()
-
-    # # go to geneformer_preprocess.ipynb to obtain geneformer embeddings
-    # # need to indicate geneformer_emb_dir in the config file
-
-    # # preprocess and prepare co-expression data
-    # data_preprocess.data_prepare_coexp()
-
-    # # preprocess and prepare gene sentence data
-    # data_preprocess.data_prepare_genesent(sent_n=200)
-
-
-    # ===== add an additional cancer type =====
-
-    data_preprocess.data_prepare_sc(additional=True)
-    # data_preprocess.data_prepare_coexp(additional=True)
-    # data_preprocess.data_prepare_genesent(sent_n=200, additional=True)
-
-    # data_preprocess.data_prepare_genesent(sent_n=200, additional=True, transform=False)
 
     
     

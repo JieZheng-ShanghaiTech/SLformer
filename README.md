@@ -1,23 +1,98 @@
 # SLformer
-Gene Sentence Modeling with scRNA-seq Data for Synthetic Lethality Prediction
+**SLformer** is a Transformer-based framework for predicting context-specific synthetic lethal (SL) interactions from single-cell RNA-seq data. It represents each gene as a co-expression gene sentence, enabling language-model architectures to capture context-dependent gene interaction rewiring. 
 
-## preprocess
-python slformer/preprocess_sc.py
+## Environment Setup
+```bash
+git clone https://github.com/JieZheng-ShanghaiTech/SLformer.git
+cd SLformer
+conda create -n slformer python=3.8
+conda activate slformer
+pip install -r requirements.txt
+```
 
-## prepare SL data
-python slformer/prepare_data.py
+## Preparing Input Data
 
-## pretrain
-python slformer/main.py --config_file=./config/pretrain.yaml --wandb_track=0 --save_model=1 --save_result=1 --batch_size=1024 --transformer_hidden_dim=512 --dropout=0.1 --eps=1e-05 --weight_decay=1e-05 --transformer_lr=1e-4 --predictor_lr=1e-4 --mlp_hidden_dim=512 --num_layers=8 --n=50 --random_init=0 --epochs=50 --device=1
+### Gene Sentence construction
+We provide precomputed gene sentence data derived from the single-cell expression data we used in this study, along with other auxiliary data required for later model training and downstram analyses, which can be downloaded [here](link). 
 
-## SL prediction
+If users wish to construct gene sentences from their own single-cell datasets, follow the instructions below.
 
-### cancer_specific
-python slformer/main.py --config_file=./config/cancer_specific/cancer_SKCM.yaml
-python slformer/main.py --config_file=./config/cancer_specific/cancer_BRCA.yaml
-...
+#### Constructing Gene Sentences from custom single-cell data
+```
+python slformer/preprocess.py --config_file=/path/to/data_config_file.yaml
+```
 
-### other tasks
-python slformer/main.py --config_file=./config/cross_cancer.yaml --wandb_track=0 --save_model=0 --save_result=1 --add_att=0 --att_nhead=2 --batch_size=512 --transformer_hidden_dim=256 --dropout=0.1 --eps=1e-05 --weight_decay=1e-05 --transformer_lr=1e-5 --predictor_lr=1e-4 --mlp_hidden_dim=128 --n_head=1 --num_layers=1 --n=10 --device=0
+`config_file` is a .yaml configuration file that should specify the following:
+- `sc_dir`: Directory containing a `raw` sub directory with single-cell expression data (.h5) and cell type metadata (.tsv)
+- `SAVED_DATA_DIR`: Output directory for saving generated gene sentence data and other auxiliary data
+- `Geneformer_dir`: Root directory of GeneFormer source codes.
+- `geneformer_gene_info_path`: A .csv table that gene meta data used by GeneFormer (Ensembl id, gene symbol, and gene type)
+- `sc_samples`: Dictionary specifying cancer types and corresponding sample ids (i.e. the h5 file names)
 
-python slformer/main.py --config_file=./config/mix.yaml --wandb_track=0 --save_model=0 --save_result=1 --add_att=1 --att_nhead=2 --batch_size=512 --transformer_hidden_dim=256 --dropout=0.1 --eps=1e-05 --weight_decay=1e-05 --transformer_lr=1e-5 --predictor_lr=1e-4 --mlp_hidden_dim=128 --n_head=1 --num_layers=2 --n=10 --device=0
+See `config/data_preprocess.yaml` as an example.
+
+Running the preprocessing pipeline produces key outputs as following:
+```text
+sc_dir/
+├── processed/
+│   └── *.h5ad
+│       # Processed single cell data restricted to malignant cells
+│       # and genes shared across all samples
+├── coexp_data/
+│   └── *_coexp.csv
+│       # Gene by gene co expression matrices for each cancer type
+└── gene_sentence/
+    └── gene_sentence_n{sent_len}/
+        # Constructed gene sentence datasets with sentence length n
+
+SAVED_DATA_DIR/
+└── map/
+    ├── gene2id.pkl
+    │   # Mapping from gene symbol to integer ID
+    ├── geneformer_emb.pkl
+    │   # Geneformer embeddings computed from the processed single cell data
+    ├── gene2sent_n{sent_len}.pkl
+    │   # Mapping from root gene ID to the list of gene IDs forming its gene sentence
+    └── sent_mask_n{sent_len}.pkl
+        # Boolean masks indicating padding positions in gene sentences
+```
+
+### Preparing SL training and test data
+To generate SL training data and indepedent test data, run the following script:
+```
+python slformer/prepare_data.py --data_config_file=/path/to/data_config_file.yaml
+```
+`data_config_file` can be the same configuration file used for preparing gene sentence data. But it has to additionally specify `SL_dataset` including dataset type and dataset path information. See `config/data_preprocess.yaml` as an example.
+
+The generated SL training data will be saved under `config.SAVED_DATA_DIR/SL_train_test_data`.
+
+## SLformer Usage
+
+For either SLformer model training or inference, use the same core command below
+
+```
+python slformer/main.py \
+    --data_config_file=/path/to/data_config_file.yaml \
+    --config_file=/path/to/task_config_file.yaml \
+```
+- `data_config_file` is the same config file used in previous input data preparation steps
+- `config_file` is a task-specific configuration file defining experimental settings. Examples can be found under `config/train` and `config/inference`. The task name (specified by the file name) must match one of the entries registered in `slformer.task.EXPERIMENT_REGISTRY`.
+
+### Supported tasks
+#### Training tasks
+- `cancer_specific`: Train and validate SLformer on individual cancers
+- `mixed_cancer`: Train and validate SLformer jointly across multiple cancers
+- `cross_cancer`: Train on all but one cancer type amd validate on the held out cancer
+
+#### Inference tasks
+- `independent_test`: Perform inference on independent test datasets using trained checkpoints
+- `get_emb`: Extract SLformer learned gene embeddings for a specified pair of genes
+- `get_att`: Extract gene sentence attention maps for a specified pair of genes
+- `IDH1_DDR_inference`: Predict SL scores between IDH1 and a list of DDR (DNA damage response) genes under a specified cancer type
+- `IDH1_PRKDC_inference`: Predict SL score between IDH1 and PRKDC under a specified cancer type
+- `IDH1_permute`: Peform bootstrap-based ranking of a set of candidate partner genes with IDH1 as the primary SL gene
+
+## Analysis and Visualization
+Scripts and notebooks for generating figures and additional analysis in this study can be found under `notebooks/`.
+
+## How to Cite

@@ -5,12 +5,11 @@ sc_dir: /data/xinliu/GeneSentence/TISCH2/
 
 SL_data_dir: ./data/SL_data
 
-# model_type = "geneformer" or "transformer"
-model_type: transformer
+model_type: transformer ## "geneformer" or "transformer"
 
 task: 
-  type: mix_add_GBM
-  mix_checkpoint: ./experiment/mix_all/transformer/2024-10-13-01:42:53
+  type: mix
+  cancer: [all]
 
 SL_dataset:
   general:

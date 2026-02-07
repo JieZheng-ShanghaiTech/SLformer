@@ -1,4 +1,3 @@
-import networkx as nx
 import pandas as pd
 import numpy as np
 import math
@@ -6,10 +5,7 @@ import torch
 import random
 import csv
 import os
-import json
 from sklearn import metrics
-from scipy import stats
-from torch.utils.data import WeightedRandomSampler
 
 
 def set_seed(seed):
@@ -77,28 +73,6 @@ def split_data_by_cancer(data, test_cancer, return_idx=False, rm_dup=True):
         return ind_test, ind_train
     else:
         return data_test, data_train
-    
-
-def find_data_idx(subset_data, total_data):
-
-    idx = []
-    for i in range(len(subset_data)):
-        idx.append(int(np.where((total_data == subset_data[i]).all(axis=1))[0][0]))
-
-    return idx
-    
-
-def get_weighted_sampler(data):
-
-    class_sample_count = np.array([len(np.where(data[:,2] == t)[0]) for t in [0,1]])
-    weight = 1. / class_sample_count
-    samples_weight = np.array([weight[t] for t in data[:,2]])
-    samples_weight = torch.from_numpy(samples_weight)
-    samples_weight = samples_weight.double()
-    sampler = WeightedRandomSampler(samples_weight, len(samples_weight))
-    # sampler = WeightedRandomSampler(samples_weight, len(samples_weight), replacement=False)
-
-    return sampler
 
 
 def calc_random_auc(test_loader):
@@ -133,32 +107,9 @@ def get_train_test_SL(data_total, cv=1, test_size=0.2, data_all=False, split_by_
     return test_data, train_data
 
 
-def transfer_data_idx(data, gene2id_map, id2cancer_map, label_name='label'):
-
-    id2gene_map = {i:g for g,i in gene2id_map.items()}
-
-    gene1_data, gene2_data, label_data, cancer_data = data[:,0],data[:,1],data[:,2],data[:,3]
-    gene1_transfer = np.array([id2gene_map[gene1_data[i]] for i in range(len(gene1_data))]).reshape(-1,1)
-    gene2_transfer = np.array([id2gene_map[gene2_data[i]] for i in range(len(gene2_data))]).reshape(-1,1)
-    cancer_transfer = np.array([id2cancer_map[cancer_data[i]] for i in range(len(cancer_data))]).reshape(-1,1)
-
-    data_transfer = np.concatenate([gene1_transfer, gene2_transfer, label_data.reshape(-1,1), cancer_transfer], axis=1)
-    df = pd.DataFrame(data_transfer, columns=['gene1', 'gene2', label_name, 'cancer'])
-
-    return df
-
-
-def clear_result(result_fp):
-
-    if os.path.exists(result_fp):
-        os.remove(result_fp)
-
-
 def mean_metrics(result_fp):
 
     log = pd.read_csv(result_fp)
-    # log_num = log.iloc[:-1,:].apply(pd.to_numeric)
-    # mean = log_num.mean()
     mean = log.mean()
 
     return dict(zip(['avg_'+m for m in mean.index], mean.values))

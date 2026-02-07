@@ -1,15 +1,9 @@
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-from torch.nn.utils.weight_norm import weight_norm
 import math
-import torch.nn.init as init
 from torch_scatter import scatter_mean
-import pickle
 
-with open('/home/tinglu/LLM4SL/KG/slformer-gene2kgemb/geneid2kgemb256_p1.pkl', 'rb') as f:
-    geneid2kgemb = pickle.load(f)
-kg_emb_size = 256 # 128, 768
 
 
 class AttTransformerEncoderLayer(nn.TransformerEncoderLayer):
@@ -25,16 +19,15 @@ class AttTransformerEncoderLayer(nn.TransformerEncoderLayer):
         return super().forward(src, *args, **kwargs)
 
 
-class Transformer_Finetuner(nn.Module):
+class SLformer(nn.Module):
 
     def __init__(self, config):
-        super(Transformer_Finetuner, self).__init__()
+        super(SLformer, self).__init__()
 
         assert config['d_model'] % config['n_head'] == 0, "nheads must divide evenly into d_model"
         self.config = config
         self.d_model = config['d_model']
-
-        # self.emb = nn.Embedding.from_pretrained(embeddings, freeze=True, padding_idx=0)
+        self.use_cross_att = config['add_att']
 
         self.pos_encoder = PositionalEncoding(
             d_model=config['d_model'],
@@ -42,12 +35,6 @@ class Transformer_Finetuner(nn.Module):
             vocab_size=config['vocab_size'],
         )
 
-        # encoder_layer = nn.TransformerEncoderLayer(
-        #     d_model=config['d_model'],
-        #     nhead=config['n_head'],
-        #     dim_feedforward=config['transformer_hidden_dim'],
-        #     dropout=config['dropout'],
-        # )
         encoder_layer = AttTransformerEncoderLayer(
             d_model=config['d_model'],
             nhead=config['n_head'],
@@ -60,168 +47,82 @@ class Transformer_Finetuner(nn.Module):
             num_layers=config['transformer_num_layers'],
         )
 
-        self.mlp_input_dim = config['d_model']*2 # kg_sentence=1
-        # self.mlp_input_dim = 1024
+        if self.use_cross_att:
+            self.fusion_model = CrossAttention(config['d_model'], 
+                                               num_layers=config['att_num_layers'], 
+                                               num_heads=config['att_nhead'], 
+                                               batch_norm=False, 
+                                               activation="relu")
 
-        if self.config['add_att']:
-            # self.cross_att_layer = CrossAttentionBlock(hidden_dim=config['d_model'], num_heads=config['att_nhead'], pooling=False)
-            self.fusion_model = CrossAttention(config['d_model'], num_layers=config['att_num_layers'], num_heads=config['att_nhead'], batch_norm=False, activation="relu")
+        predictor_input_dim = config['d_model']*2
         
-        self.predictor = MLP(num_layers=2, input_dim=self.mlp_input_dim, hidden_dim=config['mlp_hidden_dim'], output_dim=config['mlp_output_dim'])
-        # self.predictor = ResNetClassifier(config['d_model']*2)
+        self.predictor = MLP(num_layers=2, 
+                             input_dim=predictor_input_dim, 
+                             hidden_dim=config['mlp_hidden_dim'], 
+                             output_dim=config['mlp_output_dim'])
 
 
-    def forward(self, x1, mask1, x2, mask2, g1id=None, g2id=None, device=None):
+    def encode_gsent(self, x, mask):
 
-        h_total = []
-        for x, mask in [(x1, mask1), (x2, mask2)]:
-            mask = (1-mask).bool()
-            x = x.transpose(0,1)
+        mask = (1-mask).bool()
+        x = x.transpose(0,1)
+        x = x * math.sqrt(self.d_model)
+        x = self.pos_encoder(x)
+        h = self.transformer_encoder(x, src_key_padding_mask=mask)
 
-            # x = self.emb(x) * math.sqrt(self.d_model)
-            x = x * math.sqrt(self.d_model)
-            x = self.pos_encoder(x)
-            h = self.transformer_encoder(x, src_key_padding_mask=mask)
-
-            # pool = h.mean(dim=0)
-            if not self.config['add_att']:
-                h = h[0,:,:]    # [512, 256]
-            h_total.append(h)
+        return h
 
 
-        if self.config['add_att']:
-            
-            fusion_output = self.fusion_model(h_total[0], h_total[1], mask1, mask2)
+    def forward(self, x1, mask1, x2, mask2):
 
-            # fusion_output = self.fusion_model(h_total[0], h_total[1], mask1, mask2, g1id, g2id, device)
-            h_total = fusion_output
+        h1 = self.encode_gsent(x1, mask1)
+        h2 = self.encode_gsent(x2, mask2)
+
+        if self.use_cross_att:
+            ## input sentences
+            fused = self.fusion_model(h1, h2, mask1, mask2)
         else:
-            h_total = torch.cat(h_total, dim=1) # [512, 512]
-        # else:
-        #     h_total = torch.cat(h_total, dim=-1)
-            # h_total = h_total.transpose(0,1).transpose(1,2)
+            ## directly use the head gene representation
+            h1_head = h1[0,:,:]
+            h2_head = h2[0,:,:]
+            fused = torch.cat([h1_head, h2_head], dim=1)
 
-        out = self.predictor(h_total)
+        out = self.predictor(fused)
         
         return out
     
 
     def output_att(self, x1, mask1, x2, mask2):
 
-        transformer_att_all = []    ## list of 2: [att_sent1 and att_sent2]
-        h_total = []
+        h1 = self.encode_gsent(x1, mask1)
+        h2 = self.encode_gsent(x2, mask2)
+        for _, layer in enumerate(self.transformer_encoder.layers):
+            transformer_att.append(layer.attention_weights)
+        ## [batch_size, num_layer, sent_len, sent_len]
+        transformer_att = torch.stack(transformer_att, dim=1)
 
-        for x, mask in [(x1, mask1), (x2, mask2)]:
-            mask = (1-mask).bool()
-            x = x.transpose(0,1)
-
-            x = x * math.sqrt(self.d_model)
-            x = self.pos_encoder(x)
-            h = self.transformer_encoder(x, src_key_padding_mask=mask)
-
-            ## extract attention weights from transformer encoder layers
-            ## [batch_size, sent_len, sent_len]
-            transformer_att = []
-            for i, layer in enumerate(self.transformer_encoder.layers):
-                transformer_att.append(layer.attention_weights)
-            transformer_att = torch.stack(transformer_att, dim=1)
-            ## [batch_size, num_layer, sent_len, sent_len]
-            transformer_att_all.append(transformer_att)
-
-            h_total.append(h)
-        
         ## cross att
-        att_all = self.fusion_model.output_att(h_total[0], h_total[1], mask1, mask2)
-
-        return att_all, transformer_att_all
+        cross_att = self.fusion_model.output_att(h1, h2, mask1, mask2)
+        return cross_att, transformer_att
 
 
     def output_emb(self, x1, mask1, x2, mask2):
 
-        h_total = []
-        for x, mask in [(x1, mask1), (x2, mask2)]:
-            mask = (1-mask).bool()
-            x = x.transpose(0,1)
+        h1 = self.encode_gsent(x1, mask1)
+        h2 = self.encode_gsent(x2, mask2)
 
-            # x = self.emb(x) * math.sqrt(self.d_model)
-            x = x * math.sqrt(self.d_model)
-            x = self.pos_encoder(x)
-            h = self.transformer_encoder(x, src_key_padding_mask=mask)
-
-            # pool = h.mean(dim=0)
-            if not self.config['add_att']:
-                h = h[0,:,:]    # [512, 256]
-            h_total.append(h)
-
-
-        if self.config['add_att']:
-            
-            fusion_output = self.fusion_model(h_total[0], h_total[1], mask1, mask2, cat=False)
-            return h_total, fusion_output
-
+        if self.use_cross_att:
+            fused = self.fusion_model(h1, h2, mask1, mask2, cat=False)
+            return [h1,h2],fused
         else:
-            return h_total
+            return [h1,h2]
     
-
-class Transformer_Pretrain(nn.Module):
-
-    def __init__(self, config):
-        super(Transformer_Pretrain, self).__init__()
-
-        assert config['d_model'] % config['n_head'] == 0, "nheads must divide evenly into d_model"
-        self.config = config
-        self.d_model = config['d_model']
-        self.random_init = config['random_init']
-        
-        # if self.random_init:
-        #     self.emb = nn.Embedding(config['vocab_size']*9, config['d_model'], padding_idx=0)
-
-        self.pos_encoder = PositionalEncoding(
-            d_model=config['d_model'],
-            dropout=config['dropout'],
-            vocab_size=config['vocab_size'],
-        )
-
-        encoder_layer = nn.TransformerEncoderLayer(
-            d_model=config['d_model'],
-            nhead=config['n_head'],
-            dim_feedforward=config['transformer_hidden_dim'],
-            dropout=config['dropout'],
-        )
-        self.transformer_encoder = nn.TransformerEncoder(
-            encoder_layer,
-            num_layers=config['transformer_num_layers'],
-        )
-
-        self.mlp_input_dim = config['d_model']
-        
-        self.predictor = MLP(num_layers=2, input_dim=self.mlp_input_dim, hidden_dim=config['mlp_hidden_dim'], output_dim=config['mlp_output_dim'])
-
-
-    def forward(self, x, mask):
-
-        mask = (1-mask).bool()
-        x = x.transpose(0,1)
-
-        if not self.random_init:
-            x = x * math.sqrt(self.d_model)
-        else:
-            x = self.emb(x) * math.sqrt(self.d_model)
-            
-        x = self.pos_encoder(x)
-        h = self.transformer_encoder(x, src_key_padding_mask=mask)
-        h = h.mean(dim=0)
-        # h = h[0,:,:]    # [512, 256]   
-        
-        out = self.predictor(h)
-
-        return out
-
 
 
 class PositionalEncoding(nn.Module):
     """
-    https://pytorch.org/tutorials/beginner/transformer_tutorial.html
+    standard sinusoidal positional encoding
+    reference: https://pytorch.org/tutorials/beginner/transformer_tutorial.html
     """
 
     def __init__(self, d_model, vocab_size=5000, dropout=0.1):
@@ -243,6 +144,81 @@ class PositionalEncoding(nn.Module):
         x = x + self.pe[:, : x.size(1), :]
         return self.dropout(x)
 
+        
+
+class CrossAttention(nn.Module):
+
+    def __init__(self, hidden_dim=512, num_layers=1, num_heads=8, batch_norm=False, activation="relu"):
+        super(CrossAttention, self).__init__()
+        self.hidden_dim = hidden_dim
+        self.num_layers = num_layers
+        self.num_heads = num_heads
+        self.batch_norm = batch_norm
+
+        self.layers = nn.ModuleList(
+            [CrossAttentionBlock(hidden_dim, num_heads) for _ in range(num_layers)]
+        )
+
+        if batch_norm:
+            self.bn1 = nn.ModuleList([nn.BatchNorm1d(hidden_dim) for _ in range(num_layers)])
+            self.bn2 = nn.ModuleList([nn.BatchNorm1d(hidden_dim) for _ in range(num_layers)])
+
+        if isinstance(activation, str):
+            self.activation = getattr(F, activation)
+        else:
+            self.activation = activation
+
+    def forward(self, x1, x2, mask1, mask2, cat=True):
+
+        for i, layer in enumerate(self.layers):
+
+            if i == 0:
+                x1 = x1.transpose(0, 1)
+                x2 = x2.transpose(0, 1)
+
+            x1, x2 = layer(x1, x2, mask1.bool(), mask2.bool(), output_att=False)
+
+            if self.batch_norm:
+                x1 = self.bn1[i](x1.transpose(1, 2)).transpose(1, 2)
+                x2 = self.bn2[i](x2.transpose(1, 2)).transpose(1, 2)
+            if self.activation:
+                x1 = self.activation(x1)
+                x2 = self.activation(x2)
+
+        x1_output = scatter_mean(x1, mask1, dim=1)[:, 1:,].squeeze(1)
+        x2_output = scatter_mean(x2, mask1, dim=1)[:, 1:,].squeeze(1)
+
+        if cat:
+            return torch.cat([x1_output, x2_output], dim=-1)
+
+        return [x1_output, x2_output]
+    
+
+    def output_att(self, x1, x2, mask1, mask2):
+
+        for i, layer in enumerate(self.layers):
+
+            if i == 0:
+                x1 = x1.transpose(0, 1)
+                x2 = x2.transpose(0, 1)
+
+            att_all_tmp = [[],[],[],[]]
+            att_all = []
+
+            ## alpha11, alpha22, alpha12, alpha21
+            att_total = layer(x1, x2, mask1.bool(), mask2.bool(), output_att=True)
+            for j, att in enumerate(att_total):
+                att_all_tmp[j].append(att)
+            
+            for att_part in att_all_tmp:
+                ## [l,b,n,n,a]
+                att_stack = torch.stack(att_part, dim=0)
+                ## [b,l*a,n,n]
+                b,n = att_stack.shape[1], att_stack.shape[2]
+                att_stack = att_stack.permute(1, 0, 4, 2, 3).reshape(b,-1,n,n)
+                att_all.append(att_stack)
+
+        return att_all
 
 
 class CrossAttentionBlock(nn.Module):
@@ -257,13 +233,6 @@ class CrossAttentionBlock(nn.Module):
         self.num_heads = num_heads
         self.head_size = hidden_dim // num_heads
 
-        # self.pooling=pooling
-        # if self.pooling:
-        #     self.conv_layers = nn.ModuleList()
-        #     for i in range(4):
-        #         self.conv_layers.append(nn.Conv1d(in_channels=self.hidden_dim,out_channels=self.hidden_dim,
-        #                                           kernel_size=2))
-
         self.query1 = nn.Linear(hidden_dim, hidden_dim, bias=False)
         self.key1 = nn.Linear(hidden_dim, hidden_dim, bias=False)
         self.value1 = nn.Linear(hidden_dim, hidden_dim, bias=False)
@@ -271,7 +240,6 @@ class CrossAttentionBlock(nn.Module):
         self.query2 = nn.Linear(hidden_dim, hidden_dim, bias=False)
         self.key2 = nn.Linear(hidden_dim, hidden_dim, bias=False)
         self.value2 = nn.Linear(hidden_dim, hidden_dim, bias=False)
-
 
 
     def _alpha_from_logits(self, logits, mask_row, mask_col, inf=1e6):
@@ -292,8 +260,6 @@ class CrossAttentionBlock(nn.Module):
 
     def forward(self, input1, input2, mask1, mask2, output_att=False):
 
-        # input1 = input1.transpose(0, 1)
-        # input2 = input2.transpose(0, 1)
         query1 = self._heads(self.query1(input1), self.num_heads, self.head_size)
         key1 = self._heads(self.key1(input1), self.num_heads, self.head_size)
         query2 = self._heads(self.query2(input2), self.num_heads, self.head_size)
@@ -323,234 +289,30 @@ class CrossAttentionBlock(nn.Module):
             att22 = nn.functional.softmax(alpha22, dim=2)
             att12 = nn.functional.softmax(alpha12, dim=2)
             att21 = nn.functional.softmax(alpha21, dim=2)
-            return [att11, att22, att12, att21], output1, output2
-        
-        # output = []
-        # # [512, 201, 256]*2
-        # for i, out in enumerate([self_out1, self_out2, cross_out1, cross_out2]):
-        #     if self.pooling:
-        #         # Conv1D
-        #         output.append(self.conv_layers[i](out.transpose(1,2)).mean(dim=2).squeeze())
-        #     else:
-        #         output.append(out[:,0,:].squeeze())
-
-        # output_total = torch.cat(output, dim=1) #[512, dim*4]
-
-        # if not output_att:
-        #     return output_total
-        # else:
-        #     att11 = nn.functional.softmax(logits11, dim=2)
-        #     att22 = nn.functional.softmax(logits22, dim=2)
-        #     att12 = nn.functional.softmax(logits12, dim=2)
-        #     att21 = nn.functional.softmax(logits21, dim=2)
-        #     return att11, att22, att12, att21, output_total
-        
-
-class CrossAttention(nn.Module):
-
-    def __init__(self, hidden_dim=512, num_layers=1, num_heads=8, batch_norm=False, activation="relu"):
-        super(CrossAttention, self).__init__()
-        self.hidden_dim = hidden_dim
-        self.num_layers = num_layers
-        self.num_heads = num_heads
-        self.batch_norm = batch_norm
-
-        self.layers = nn.ModuleList()
-        for _ in range(self.num_layers):
-            self.layers.append(CrossAttentionBlock(hidden_dim, num_heads))
-
-        if batch_norm:
-            self.protein_batch_norm_layers = nn.ModuleList()
-            self.text_batch_norm_layers = nn.ModuleList()
-            for _ in range(self.num_layers):
-                self.protein_batch_norm_layers.append(nn.BatchNorm1d(hidden_dim))
-                self.text_batch_norm_layers.append(nn.BatchNorm1d(hidden_dim))
-
-        if isinstance(activation, str):
-            self.activation = getattr(F, activation)
-        else:
-            self.activation = activation
-
-    def forward(self, x1, x2, mask1, mask2, cat=True, all_loss=None, metric=None):
-        # Padding for protein inputs
-        # x1, protein_mask = variadic_to_padded(x1, graph.num_residues, value=0)
-
-        for i, layer in enumerate(self.layers):
-
-            if i == 0:
-                x1 = x1.transpose(0, 1)
-                x2 = x2.transpose(0, 1)
-
-            x1, x2 = layer(x1, x2, mask1.bool(), mask2.bool(), output_att=False)
-
-            if self.batch_norm:
-                x1 = self.protein_batch_norm_layers[i](x1.transpose(1, 2)).transpose(1, 2)
-                x2 = self.text_batch_norm_layers[i](x2.transpose(1, 2)).transpose(1, 2)
-            if self.activation:
-                x1 = self.activation(x1)
-                x2 = self.activation(x2)
-
-        x1_output = scatter_mean(x1, mask1, dim=1)[:, 1:,].squeeze(1)
-        x2_output = scatter_mean(x2, mask1, dim=1)[:, 1:,].squeeze(1)
-
-        if cat:
-            return torch.cat([x1_output, x2_output], dim=-1)
-        else:
-            return [x1_output, x2_output]
-
-        # return {
-        #     "gene1": protein_output,
-        #     "gene2": text_output
-        # }
-    
-
-    def output_att(self, x1, x2, mask1, mask2):
-
-        for i, layer in enumerate(self.layers):
-
-            if i == 0:
-                x1 = x1.transpose(0, 1)
-                x2 = x2.transpose(0, 1)
-
-            att_all_tmp = [[],[],[],[]]
-            att_all = []
-
-            ## alpha11, alpha22, alpha12, alpha21
-            att_total, _, _ = layer(x1, x2, mask1.bool(), mask2.bool(), output_att=True)
-            for j, att in enumerate(att_total):
-                att_all_tmp[j].append(att)
-            
-            for att_part in att_all_tmp:
-                ## [l,b,n,n,a]
-                att_stack = torch.stack(att_part, dim=0)
-                ## [b,l*a,n,n]
-                b,n = att_stack.shape[1], att_stack.shape[2]
-                att_stack = att_stack.permute(1, 0, 4, 2, 3).reshape(b,-1,n,n)
-                att_all.append(att_stack)
-
-        return att_all
-
-
-
-class CrossAttention_latefusion(nn.Module):
-
-    def __init__(self, hidden_dim=512, num_layers=1, num_heads=8, batch_norm=False, activation="relu"):
-        super(CrossAttention, self).__init__()
-        self.hidden_dim = hidden_dim
-        self.num_layers = num_layers
-        self.num_heads = num_heads
-        self.batch_norm = batch_norm
-
-        self.layers = nn.ModuleList()
-        for _ in range(self.num_layers):
-            self.layers.append(CrossAttentionBlock(hidden_dim, num_heads))
-
-        if batch_norm:
-            self.protein_batch_norm_layers = nn.ModuleList()
-            self.text_batch_norm_layers = nn.ModuleList()
-            for _ in range(self.num_layers):
-                self.protein_batch_norm_layers.append(nn.BatchNorm1d(hidden_dim))
-                self.text_batch_norm_layers.append(nn.BatchNorm1d(hidden_dim))
-
-        if isinstance(activation, str):
-            self.activation = getattr(F, activation)
-        else:
-            self.activation = activation
-
-    def forward(self, protein_input, text_input, mask1, mask2, g1id, g2id, device, all_loss=None, metric=None):
-        # Padding for protein inputs
-        # protein_input, protein_mask = variadic_to_padded(protein_input, graph.num_residues, value=0)
-
-        for i, layer in enumerate(self.layers):
-
-            if i == 0:
-                protein_input = protein_input.transpose(0, 1)
-                text_input = text_input.transpose(0, 1)
-
-            protein_input, text_input = layer(protein_input, text_input, mask1.bool(), mask2.bool())
-            if self.batch_norm:
-                protein_input = self.protein_batch_norm_layers[i](protein_input.transpose(1, 2)).transpose(1, 2)
-                text_input = self.text_batch_norm_layers[i](text_input.transpose(1, 2)).transpose(1, 2)
-            if self.activation:
-                protein_input = self.activation(protein_input)
-                text_input = self.activation(text_input)
-
-        protein_output = scatter_mean(protein_input, mask1, dim=1)[:, 1:,].squeeze(1)
-        text_output = scatter_mean(text_input, mask1, dim=1)[:, 1:,].squeeze(1)
-
-        #####################################################
-        kg_emb1, kg_emb2 = torch.zeros(kg_emb_size).to(device), torch.zeros(kg_emb_size).to(device)
-        # print("crossatten", g1id.shape, protein_output.shape, text_output.shape) # torch.Size([512]) torch.Size([512, 256]) torch.Size([512, 256])
-        # g1id, g2id = g1id.item(), g2id.item()  # Convert tensor to int
-        if g1id in geneid2kgemb:
-            kg_emb1 = torch.tensor(geneid2kgemb[g1id])
-        if g2id in geneid2kgemb:
-            kg_emb2 = torch.tensor(geneid2kgemb[g2id])
-        
-            
-        kg_emb1 = kg_emb1.unsqueeze(0).expand(protein_output.size(0), -1)
-        kg_emb2 = kg_emb2.unsqueeze(0).expand(text_output.size(0), -1)
-
-        #####################################################
-
-        # return torch.cat([protein_output, kg_emb1, text_output, kg_emb2], dim=-1)
-        return torch.cat([protein_output, text_output, kg_emb1, kg_emb2], dim=-1)
-
-        # return torch.cat([protein_output, text_output], dim=-1)
-        
+            return [att11, att22, att12, att21]
 
     
         
 class MLP(nn.Module):
-    """MLP with linear output"""
-
     def __init__(self, num_layers, input_dim, hidden_dim, output_dim):
-        """MLP layers construction
-
-        Paramters
-        ---------
-        num_layers: int
-            The number of linear layers
-        input_dim: int
-            The dimensionality of input features
-        hidden_dim: int
-            The dimensionality of hidden units at ALL layers
-        output_dim: int
-            The number of classes for prediction
-
+        """
+        simple MLP with batchnorm and relu
         """
         super(MLP, self).__init__()
         self.num_layers = num_layers
         self.output_dim = output_dim
-
-        if num_layers < 1:
-            raise ValueError("number of layers should be positive!")
         
         self.linears = torch.nn.ModuleList()
         self.batch_norms = torch.nn.ModuleList()
 
         self.linears.append(nn.Linear(input_dim, hidden_dim))
-        for layer in range(num_layers - 2):
+        for _ in range(num_layers - 2):
             self.linears.append(nn.Linear(hidden_dim, hidden_dim))
         self.linears.append(nn.Linear(hidden_dim, output_dim))
 
-        for layer in range(num_layers - 1):
+        for _ in range(num_layers - 1):
             self.batch_norms.append(nn.BatchNorm1d(hidden_dim))
         
-        
-    #     # Initialize weights
-    #     self._initialize_weights()
-
-    # def _initialize_weights(self):
-    #     """Initialize the weights of the MLP"""
-    #     for m in self.modules():
-    #         if isinstance(m, nn.Linear):
-    #             init.kaiming_normal_(m.weight, mode='fan_out', nonlinearity='relu')
-    #             if m.bias is not None:
-    #                 init.constant_(m.bias, 0)
-    #         elif isinstance(m, nn.BatchNorm1d):
-    #             init.constant_(m.weight, 1)
-    #             init.constant_(m.bias, 0)
     def forward(self, x):
 
         h = x
@@ -559,38 +321,4 @@ class MLP(nn.Module):
         return self.linears[-1](h)
     
 
-    def output_att(self, x):
-
-        h = x
-        for i in range(self.num_layers - 1):
-            h = F.relu(self.batch_norms[i](self.linears[i](h)))
-        return h
-
-
-
-
-class MLP_simple(nn.Module):
-
-    def __init__(self, layer_size, output_dim, return_hidden=True):
-        super(MLP_simple, self).__init__()
-
-        self.return_hidden = return_hidden
-
-        layers = []
-        for i in range(len(layer_size)-1):
-            layers.append(nn.Linear(layer_size[i], layer_size[i+1]))
-            layers.append(nn.BatchNorm1d(layer_size[i+1]))
-            layers.append(nn.ReLU())
-        
-        self.network = torch.nn.Sequential(*layers)
-        self.lin = nn.Linear(layer_size[-1], output_dim)
-        
-    def forward(self, x):
-
-        h = self.network(x)
-        res = self.lin(torch.nn.functional.relu(h))
-        if self.return_hidden:
-            return h, res
-        else:
-            return res
         

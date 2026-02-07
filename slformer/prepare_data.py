@@ -9,18 +9,180 @@ import random
 from sklearn.metrics import average_precision_score, precision_recall_curve
 
 from preprocess import Data_Preprocess
-from dataloader import prepare_SL_data
-from util import create_dir, get_train_test_SL, transfer_data_idx, find_data_idx
+from util import create_dir, get_train_test_SL
 
 
-def save_train_test_data(config, common_data):
+class SL_Loader():
+
+    def __init__(self, config, gene2id_map, gene_emb_map, geneformer_emb_map, cancer2id_map, type="general"):
+        """
+        Organizing SL gene pairs data
+        args:
+            - config: config file, should include paths and other information of SL datasets that need to be processed
+            - gene2id_map: gene to index mapping
+            - gene_emb_map: gene to gene sentence mapping
+            - geneformer_emb_map: gene to Geneformer embedding mapping
+            - cancer2id_map: cancer to index mapping
+            - type: 'general' (benchmark data) or 'downstream' (independent test data)
+        """
+
+        self.SL_datasets = config.SL_dataset
+
+        self.gene2id_map = gene2id_map
+        self.gene_list = list(self.gene2id_map.keys())
+
+        self.gene_emb_map = gene_emb_map
+        self.geneformer_emb_map = geneformer_emb_map
+
+        self.cancer2id_map = cancer2id_map
+
+        # load ELISL SL dataset
+        self.SL_general_df = pd.read_excel(self.SL_datasets.general.path)
+        
+        if type == "downstream":
+            SL_general_data = self.get_SL_data(data_type="general",cancer_filt="all")
+            self.SL_unique_gene = np.unique(SL_general_data[:,:2].flatten()).tolist()
+            self.SL_general_map = self.construct_SL_general_map(self.SL_general_df)
+
+
+    def get_SL_data(self, data_type, cancer_filt='all', downstream_stat=False):
+        """
+        returns:
+            npy format of SL gene pairs data:
+                [gene1_id, gene2_id, SL_label, context_id]
+        """
+
+        if data_type == "general":
+            SL_general_data = self.construct_data(self.SL_general_df, cancer_filt)
+            
+            return SL_general_data
+        
+        elif data_type in self.SL_datasets.keys():
+            SL_data = pd.read_csv(self.SL_datasets[data_type].path)
+            SL_filt_general = self.filt_SL_general(self.SL_general_map, SL_data)
+
+            SL_filt = self.construct_data(SL_filt_general, cancer_filt='all')
+            print("Processing", data_type, "size=", len(SL_filt))
+
+            if downstream_stat:
+                downstream_gene = list(set(SL_filt[:,0]).union(set(SL_filt[:,1])))
+                downstream_overlap = list(set(downstream_gene).intersection(set(self.SL_unique_gene)))
+                print(f"Overlapped genes with ELISL SL data: {len(downstream_overlap)}/{len(downstream_gene)}")
+
+            return SL_filt
+
+        else:
+            raise Exception("Invalid data type")
+                
+
+    def construct_data(self, df, cancer_filt):
+
+        label_name = df.columns[-1]
+
+        # leave out genes not included in gene list
+        gene1_bool = [True if g in self.gene_list else False for g in df["gene1"]]
+        gene2_bool = [True if g in self.gene_list else False for g in df["gene2"]]
+        SL_filt = df[np.logical_and(gene1_bool, gene2_bool)]
+
+        # leave out cancers not included in the cancer types
+        if cancer_filt != 'all':
+            cancer_bool = [True if cancer in cancer_filt else False for cancer in SL_filt["cancer"]]
+            SL_filt = SL_filt[cancer_bool]
+
+        # leave out genes without geneformer embeddings or specific embeddings
+        filt_data = []
+        for idx, row in SL_filt.iterrows():
+            cancer = self.cancer2id_map[row["cancer"]]
+            g1_idx = self.gene2id_map[row["gene1"]]
+            g2_idx = self.gene2id_map[row["gene2"]]
+
+            if g1_idx in self.gene_emb_map[cancer] and g2_idx in self.gene_emb_map[cancer]:
+                if g1_idx in self.geneformer_emb_map[cancer] and g2_idx in self.geneformer_emb_map[cancer]:
+                    filt_data.append([g1_idx, g2_idx, row[label_name], cancer])
+
+        return np.array(filt_data)
+    
+
+    def construct_SL_general_map(self, SL_general_data):
+
+        SL_map = {}
+        for g in list(set(SL_general_data["gene1"]).union(set(SL_general_data["gene2"]))):
+            SL_map[g] = []
+
+        for idx, row in SL_general_data.iterrows():
+            if row["gene2"] not in SL_map[row["gene1"]]:
+                SL_map[row["gene1"]].append(row["gene2"])
+            if row["gene1"] not in SL_map[row["gene2"]]:
+                SL_map[row["gene2"]].append(row["gene1"])
+        
+        return SL_map
+    
+
+    def filt_SL_general(self, SL_general_map, SL_data):
+
+        flag = []
+
+        for idx, row in SL_data.iterrows():
+            g1, g2 = row["gene1"], row["gene2"]
+            if g1 in list(SL_general_map.keys()):
+                if g2 not in SL_general_map[g1]:
+                    flag.append(True)
+                else:
+                    flag.append(False)
+            else:
+                flag.append(True)
+        
+        return SL_data[flag]
+
+
+def prepare_SL_data(config, cancer, common_data, type="general"):
+    """
+    function for getting npy SL pair data
+    args:
+        - config: config information for data processing
+        - cancer: a specific cancer type or 'all'
+        - common data: commonly used data returned by Data_Preprocess.get_common_data
+        - type: 'general' (benchmark data) or 'downstream' (independent test data)
+    """
+
+    SL_loader = SL_Loader(
+        config=config,
+        gene2id_map=common_data["gene2id_map"],
+        gene_emb_map=common_data["gene2sent_map"],
+        geneformer_emb_map=common_data["geneformer_emb_map"],
+        cancer2id_map=common_data["cancer2id_map"],
+        type=type
+    )
+
+    ## benchmark data
+    if type == "general":
+        data_total = SL_loader.get_SL_data(data_type="general", cancer_filt=cancer) # return a numpy array
+        if len(data_total) > 0: # belonging to ELISL cancer types
+            print(f"Processed {cancer} data, size={len(data_total)}")
+    ## independent test data
+    elif type == "downstream":
+        data_total = {}
+        for data_type in list(SL_loader.SL_datasets.keys()):
+            if data_type != "general":
+                data = SL_loader.get_SL_data(data_type=data_type, cancer_filt="all", downstream_stat=False)
+                data_total[data_type] = data
+
+    return data_total
+
+
+def save_train_test_data(config, common_data, suffix='all'):
+    """
+    save SL train/test data (8 cancers not including GBM)
+    args:
+        - config: config information for data processing
+        - common data: commonly used data returned by Data_Preprocess.get_common_data
+    """
 
     cancer_list = common_data["cancer_list"]
-    cancer_list = ["Glioma"]+cancer_list
     id2cancer_map = {i:c for c,i in common_data["cancer2id_map"].items()}
 
     ## cancer-specific and mix
-    save_dir = os.path.join(config.SAVED_DATA_DIR, "SL_train_test_data", "cancer_specific_all")
+    save_dir = os.path.join(config.SAVED_DATA_DIR, "SL_train_test_data", f"cancer_specific_{suffix}")
     create_dir(save_dir)
     data_mix_train = {i:[] for i in range(1,6)}
     data_mix_test = {i:[] for i in range(1,6)}
@@ -39,22 +201,16 @@ def save_train_test_data(config, common_data):
             data_mix_test[cv].append(data_test)
 
     ## mix
-    save_dir = os.path.join(config.SAVED_DATA_DIR, "SL_train_test_data", "mix_all")
+    save_dir = os.path.join(config.SAVED_DATA_DIR, "SL_train_test_data", f"mix_{suffix}")
     create_dir(save_dir)
     for cv in range(1,6):
         data_train = np.concatenate(data_mix_train[cv], axis=0)
         data_test = np.concatenate(data_mix_test[cv], axis=0)
         np.save(os.path.join(save_dir, f"test_all_fold_{cv}.npy"), data_test)
         np.save(os.path.join(save_dir, f"train_all_fold_{cv}.npy"), data_train)
-
-    # for cv in range(1,6):
-        # data_test, data_train = get_train_test_SL(data_total, cv=cv, data_all=False, return_idx=False)
-        # np.save(os.path.join(save_dir, f"test_all_fold_{cv}.npy"), data_test)
-        # np.save(os.path.join(save_dir, f"train_all_fold_{cv}.npy"), data_train)
-
             
     ## cross-cancer
-    save_dir = os.path.join(config.SAVED_DATA_DIR, "SL_train_test_data", "cross_cancer_all")
+    save_dir = os.path.join(config.SAVED_DATA_DIR, "SL_train_test_data", f"cross_cancer_{suffix}")
     create_dir(save_dir)
     data_total = prepare_SL_data(
         config=config,
@@ -71,6 +227,9 @@ def save_train_test_data(config, common_data):
             
 
 def save_mix_add_GBM_data(config, common_data):
+    """
+    save mixed-cancer scenario SL train/test data (9 cancers in total including GBM)
+    """
 
     gene_sent_map = common_data["gene2sent_map"]
     geneformer_emb_map=common_data["geneformer_emb_map"]
@@ -107,7 +266,10 @@ def save_mix_add_GBM_data(config, common_data):
 
 
 def save_mix_subset_data(config, common_data, cancers):
-    ## cancers is a list of cancer types and does not include Glioma
+    """
+    save mixed-cancer scenario SL train/test data for only few cancer types
+    Note 'cancers' should not include Glioma
+    """
     cancer_types = cancers
     cancer_types.sort()
     save_dir = os.path.join(config.SAVED_DATA_DIR, "SL_train_test_data", f"mix_{'_'.join(cancer_types)}")
@@ -127,9 +289,13 @@ def save_mix_subset_data(config, common_data, cancers):
 
 
 def save_full_train_data(config, common_data):
+    """
+    save full SL data (8 cancers)
+    """
 
     save_dir = os.path.join(config.SAVED_DATA_DIR, "SL_full_data")
     create_dir(save_dir)
+    ## all cancers included in benchmark dataset
     data_total = prepare_SL_data(
         config=config,
         cancer="all",
@@ -138,73 +304,61 @@ def save_full_train_data(config, common_data):
     )
     
     np.save(os.path.join(save_dir, "SL_full.npy"), data_total)
-
-
-def save_fewshot_test_data(config, common_data):
-
-    save_dir = os.path.join(config.SAVED_DATA_DIR, "SL_fewshot_data")
-    create_dir(save_dir)
-
-    cancer_list = common_data["cancer_list"]
-
-    data_total_cancer = {}
-    for cancer_type in cancer_list:
-        data_total = prepare_SL_data(
-            config=config,
-            cancer=cancer_type,
-            common_data=common_data,
-            type="general"
-        )
-        data_total_cancer[cancer_type] = data_total
-
-    # for cancer_out in cancer_list:
-    for cancer_out in ['LAML','SKCM','CESC']:
-    # cancer_out = 'OV'
-    # cancer_out = 'BRCA'
-        cancer_cv = [c for c in cancer_list if c != cancer_out]
-        data_mix_train = {i:[] for i in range(1,6)}
-        data_mix_test = {i:[] for i in range(1,6)}
-        for cancer_type in cancer_cv:
-            data_total = data_total_cancer[cancer_type]
-            for cv in range(1,6):
-                data_test, data_train = get_train_test_SL(data_total, cv=cv, data_all=False, return_idx=False)
-                data_mix_train[cv].append(data_train)
-                data_mix_test[cv].append(data_test)
-
-        data_out = prepare_SL_data(
-            config=config,
-            cancer=cancer_out,
-            common_data=common_data,
-            type="general"
-        )
-        ## can change the ratio of test data here
-        data_out_val, data_out_mix = get_train_test_SL(data_out, test_size=0.2, cv=1, data_all=False, return_idx=False)
-
-        np.save(os.path.join(save_dir, f"fewshot_{cancer_out}_val.npy"), data_out_val)
-        np.save(os.path.join(save_dir, f"fewshot_{cancer_out}_train.npy"), data_out_mix)
-
-        for cv in range(1,6):
-            ## add the part of the out cancer data to the training data
-            data_out_test, data_out_train = get_train_test_SL(data_out_mix, test_size=0.2, cv=cv, data_all=False, return_idx=False)
-            data_mix_train[cv].append(data_out_train)
-            data_mix_test[cv].append(data_out_test)
-            data_train = np.concatenate(data_mix_train[cv], axis=0)
-            data_test = np.concatenate(data_mix_test[cv], axis=0)
-            np.save(os.path.join(save_dir, f"test_{cancer_out}_fold_{cv}.npy"), data_test)
-            np.save(os.path.join(save_dir, f"train_{cancer_out}_fold_{cv}.npy"), data_train)
-    
     
 
-def save_independent_test_data(config, data_total):
+def save_independent_test_data(config, common_data):
+    """
+    save SL independent test data
+    """
+
+    data_total = prepare_SL_data(
+        config=config,
+        cancer="all",
+        common_data=common_data,
+        type="downstream"
+    )
 
     save_dir = os.path.join(config.SAVED_DATA_DIR, "independent_test_data")
+    create_dir(save_dir)
 
     for data_type, data in data_total.items():
         np.save(os.path.join(save_dir, f"{data_type}.npy"), data)
 
 
+def transfer_data_idx(data, gene2id_map, id2cancer_map, label_name='label'):
+    """
+    helper function for remapping gene indices
+    """
+
+    id2gene_map = {i:g for g,i in gene2id_map.items()}
+
+    gene1_data, gene2_data, label_data, cancer_data = data[:,0],data[:,1],data[:,2],data[:,3]
+    gene1_transfer = np.array([id2gene_map[gene1_data[i]] for i in range(len(gene1_data))]).reshape(-1,1)
+    gene2_transfer = np.array([id2gene_map[gene2_data[i]] for i in range(len(gene2_data))]).reshape(-1,1)
+    cancer_transfer = np.array([id2cancer_map[cancer_data[i]] for i in range(len(cancer_data))]).reshape(-1,1)
+
+    data_transfer = np.concatenate([gene1_transfer, gene2_transfer, label_data.reshape(-1,1), cancer_transfer], axis=1)
+    df = pd.DataFrame(data_transfer, columns=['gene1', 'gene2', label_name, 'cancer'])
+
+    return df
+
+
+def find_data_idx(subset_data, total_data):
+    """
+    helper function for indexing data
+    """
+
+    idx = []
+    for i in range(len(subset_data)):
+        idx.append(int(np.where((total_data == subset_data[i]).all(axis=1))[0][0]))
+
+    return idx
+
 
 def get_benchmark_df(config, common_data):
+    """
+    Organize unified benchmark SL pairs into dataframes
+    """
 
     cancer_list = common_data["cancer_list"]
     gene2id_map = common_data["gene2id_map"]
@@ -234,7 +388,6 @@ def get_benchmark_df(config, common_data):
     # cross_cancer
     for cancer in range(len(cancer_list)):
         cancer_name = id2cancer_map[cancer]
-    # for cancer, cancer_name in id2cancer_map.items():
         data_test = np.load(os.path.join(config.SAVED_DATA_DIR, "SL_train_test_data", "cross_cancer_all", f"test_{cancer_name}.npy"))
         data_train = np.load(os.path.join(config.SAVED_DATA_DIR, "SL_train_test_data", "cross_cancer_all", f"train_{cancer_name}.npy"))
         df_test = transfer_data_idx(data_test, gene2id_map, id2cancer_map)
@@ -244,6 +397,9 @@ def get_benchmark_df(config, common_data):
 
 
 def prepare_ELISL_data(config, common_data, ELISL_data_dir):
+    """
+    Organize benchmark SL pairs into dataframes that fit ELISL SL data format 
+    """
 
     cancer_list = common_data["cancer_list"]
     gene2id_map = common_data["gene2id_map"]
@@ -286,7 +442,6 @@ def prepare_ELISL_data(config, common_data, ELISL_data_dir):
     # 'cross-cancer'
     for cancer in range(len(cancer_list)):
         cancer_name = id2cancer_map[cancer]
-    # for cancer, cancer_name in id2cancer_map.items():
 
         fold_idx = {}
 
@@ -301,7 +456,9 @@ def prepare_ELISL_data(config, common_data, ELISL_data_dir):
             json.dump(fold_idx, fp)
 
 
-
+"""
+some helper functions for filtering out genes with missing features
+"""
 def filt_SL_test(gene_candidates, gene2id_map, gene_emb_map, geneformer_emb_map, context=8):
 
     candidate_filt = list(set(gene_candidates).intersection(set(gene2id_map.keys())))
@@ -359,6 +516,9 @@ def filt_SL_test_pairs_id(gene1_candidates, gene2_candidates, gene2id_map, gene_
 
 
 def prepare_IDH1_DDR_data(common_data, cancer="Glioma"):
+    """
+    construct npy input data for IDH1-DDR genes SL pairs
+    """
 
     DDR_genelist_dir = "./data/DDR_genelist"
     save_dir = "./data/saved_data/inference"
@@ -384,7 +544,7 @@ def prepare_IDH1_DDR_data(common_data, cancer="Glioma"):
 
     data_reactome.append([gene2id_map['IDH1'], gene2id_map['BCL2L1'], 0, cancer_id])
     data_reactome.append([gene2id_map['IDH1'], gene2id_map['NUDT1'], 0, cancer_id])
-    ## add additional candidates genes from https://link.springer.com/article/10.1007/s11912-020-01006-6
+    ## add additional candidates genes from review: https://link.springer.com/article/10.1007/s11912-020-01006-6
     data_reactome.append([gene2id_map['IDH1'], gene2id_map['PDGFRA'], 0, cancer_id])
     data_reactome.append([gene2id_map['IDH1'], gene2id_map['RB1'], 0, cancer_id])
     data_reactome.append([gene2id_map['IDH1'], gene2id_map['PIK3CA'], 0, cancer_id])
@@ -397,52 +557,10 @@ def prepare_IDH1_DDR_data(common_data, cancer="Glioma"):
     np.save(os.path.join(save_dir, f"IDH1_DDR_{cancer}_kegg.npy"), np.array(data_kegg))
 
 
-def prepare_PTEN_GBM_data(common_data, cancer="Glioma"):
-
-    save_dir = "./data/saved_data/inference"
-    create_dir(save_dir)
-
-    gene_sent_map = common_data["gene2sent_map"]
-    geneformer_emb_map=common_data["geneformer_emb_map"]
-    gene2id_map = common_data["gene2id_map"]
-    cancer2id_map = common_data["cancer2id_map"]
-
-    genes_all = list(gene2id_map.keys())
-    cancer_id = cancer2id_map[cancer]
-    genes_all_filt = filt_SL_test(genes_all, gene2id_map, gene_sent_map, geneformer_emb_map, context=cancer_id)
-
-    print("total number of partner genes:", len(genes_all_filt))
-    ## 7301
-    data_all = []
-    for g in genes_all_filt:
-        data_all.append([gene2id_map['PTEN'], g, 0, cancer_id])
-
-    np.save(os.path.join(save_dir, f"PTEN_{cancer}_allgenes.npy"), np.array(data_all))
-
-
-def prepare_PRMT5_MAT2A_data(common_data):
-
-    save_dir = "./data/saved_data/inference"
-    create_dir(save_dir)
-
-    gene_sent_map = common_data["gene2sent_map"]
-    geneformer_emb_map=common_data["geneformer_emb_map"]
-    gene2id_map = common_data["gene2id_map"]
-
-    geneid1 = gene2id_map["MAT2A"]; geneid2 = gene2id_map["PRMT5"]
-
-    data_all = []
-    for cancer_id in range(9):
-        ## check if both genes are accessible
-        genes_filt = filt_SL_test(["PRMT5", "MAT2A"], gene2id_map, gene_sent_map, geneformer_emb_map, context=cancer_id)
-        if len(genes_filt) >= 2:
-            print(cancer_id)    ## 0,1,2,5,6,7,8
-            data_all.append([geneid1, geneid2, 0, cancer_id]) ## dummpy label
-
-    np.save(os.path.join(save_dir, f"PRMT5_MAT2A_allcancer.npy"), np.array(data_all))
-
-
 def prepare_IDH1_PRKDC_data(common_data):
+    """
+    construct npy input data for IDH1-PRKDC SL pair
+    """
 
     save_dir = "./data/saved_data/inference"
     create_dir(save_dir)
@@ -465,6 +583,9 @@ def prepare_IDH1_PRKDC_data(common_data):
 
 
 def single_permute_data(common_data, primary_gene, partner_candidate, n_sample=100, seed=0, cancer="Glioma"):
+    """
+    single-step of bootstrap ranking
+    """
 
     gene_sent_map = common_data["gene2sent_map"]
     geneformer_emb_map=common_data["geneformer_emb_map"]
@@ -476,10 +597,8 @@ def single_permute_data(common_data, primary_gene, partner_candidate, n_sample=1
     ## sample the background genes
     random.seed(seed)
     genes_bkg = random.sample(genes_all, n_sample)
-    # test_genes = [partner_candidate]+genes_bkg
 
     cancer_id = cancer2id_map[cancer]
-    # test_genes_filt = filt_SL_test(test_genes, gene2id_map, gene_sent_map, geneformer_emb_map, context=cancer_id)
     test_genes_filt = filt_SL_test(genes_bkg, gene2id_map, gene_sent_map, geneformer_emb_map, context=cancer_id)
     test_genes_filt = [gene2id_map[partner_candidate]]+test_genes_filt
     data_all = []
@@ -491,6 +610,9 @@ def single_permute_data(common_data, primary_gene, partner_candidate, n_sample=1
 
 
 def prepare_GBM_data(common_data):
+    """
+    prepare additional GBM SL pairs data
+    """
 
     data = pd.read_csv("./data/saved_data/GBM_SL/GBM_SLdata.csv")
     save_dir = "./data/saved_data/GBM_SL"
@@ -500,9 +622,6 @@ def prepare_GBM_data(common_data):
     gene2id_map = common_data["gene2id_map"]
     cancer2id_map = common_data["cancer2id_map"]
     id2gene_map = {i:g for g,i in gene2id_map.items()}
-
-    # gene_emb_map=common_data["gene2sent_map"],
-    # geneformer_emb_map=common_data["geneformer_emb_map"],
 
     cancer_id = cancer2id_map["Glioma"]
 
@@ -529,61 +648,11 @@ def prepare_GBM_data(common_data):
     data_total = np.array(data_total)
     np.save(os.path.join(save_dir, f"GBM_SL.npy"), data_total)
 
-    ## filt through geneformer emb map and gene sent map
-    # filt_data = []
-    # for i in range(len(data_total)):
-    #     g1_idx = data_total[i, 0]
-    #     g2_idx = data_total[i, 1]
-    #     if g1_idx in gene_sent_map[cancer_id] and g2_idx in gene_sent_map[cancer_id]:
-    #         if g1_idx in geneformer_emb_map[cancer_id] and g2_idx in geneformer_emb_map[cancer_id]:
-    #             filt_data.append([g1_idx, g2_idx, data_total[i, 2], 8])
-    # print("size of filt GBM data:", len(filt_data))
-
-    # return data_total
-
-    # id2gene_map = {i:g for g,i in gene2id_map.items()}
-    # GBM_data = np.load("./data/saved_data/GBM_SL/GBM_SL.npy")
-    # for i in range(len(GBM_data)):
-    #     print(id2gene_map[GBM_data[i,0]], id2gene_map[GBM_data[i,1]], GBM_data[i,2])
-
-
-def prepare_MiSL_IDH1_data(cancer='LAML'):
-
-    data = pd.read_excel("data/saved_data/MiSL_IDH1/MiSL_IDH1.xlsx")
-    save_dir = "./data/saved_data/MiSL_IDH1/"
-
-    gene_sent_map = common_data["gene2sent_map"]
-    geneformer_emb_map=common_data["geneformer_emb_map"]
-    gene2id_map = common_data["gene2id_map"]
-    cancer2id_map = common_data["cancer2id_map"]
-    id2gene_map = {i:g for g,i in gene2id_map.items()}
-
-    misl_candidates = list(data['MiSL.Candidate'])
-    cancer_id = cancer2id_map[cancer]
-    misl_filt = filt_SL_test(misl_candidates, gene2id_map, gene_sent_map, geneformer_emb_map, context=cancer_id)
-    print("# pos samples:", len(misl_filt))
-
-    data_total = []
-    for g in misl_filt:
-        data_total.append([gene2id_map['IDH1'], g, 1, cancer_id])
-
-    random.seed(1)
-    gene_context = list(geneformer_emb_map[cancer_id])
-    gene_context_sample = [g for g in gene_context if g not in misl_filt]
-    neg_gene_ids = random.sample(gene_context_sample , 5*len(misl_filt))
-    neg_gene = [id2gene_map[i] for i in neg_gene_ids]
-    neg_filt = filt_SL_test(neg_gene, gene2id_map, gene_sent_map, geneformer_emb_map, context=cancer_id)
-    neg_filt = neg_filt[:4*len(misl_filt)]  ## keep only 5* size in total
-    for g in neg_filt:
-        data_total.append([gene2id_map['IDH1'], g, 0, cancer_id])
-
-    print("# total samples:", len(data_total))
-    data_total = np.array(data_total)
-    np.save(os.path.join(save_dir, f"MiSL_IDH1_processed_{cancer}.npy"), data_total)
-
-
 
 def get_random_aupr_f1(config, common_data):
+    """
+    compute performance metrics for random prediction
+    """
 
     np.random.seed(1)
 
@@ -652,81 +721,29 @@ def get_random_aupr_f1(config, common_data):
 
 
 
+def main(config):
+
+    ## only run codes that are used
+    data_preprocess = Data_Preprocess(config)
+    common_data = data_preprocess.get_common_data(sent_n=200)
+
+    ## save SL train/test data (general)
+    save_train_test_data(config, common_data)
+
+    ## save independent test
+    save_independent_test_data(config, common_data)
+
+
 if __name__ == "__main__":
 
     parser = argparse.ArgumentParser(description='prepare SL data')
-
     parser.add_argument('--data_config_file', type=str, default="./config/data_preprocess.yaml",
                     help='data preprocess config file path')
-    parser.add_argument('--config_file', type=str, default="./config/independent_test.yaml",
-                        help='config file path')
     args = parser.parse_args()
 
-
     with open(args.data_config_file, 'r') as f:
-        data_config = easydict.EasyDict(yaml.safe_load(f))
-    with open(args.config_file, 'r') as f:
         config = easydict.EasyDict(yaml.safe_load(f))
 
-    data_preprocess = Data_Preprocess(data_config)
-    common_data = data_preprocess.get_common_data(sent_n=200)
-
-
+    main(config)
     
-
-    ### save SL train/test data (general)
-    # save_train_test_data(config, common_data)
-
-    ### save mix SL train/test data (general+GBM)
-    # save_mix_add_GBM_data(config, common_data)
-
-    ## save full SL data (general)
-    # save_full_train_data(config, common_data)
-
-    ## save SL data for few shot test
-    # save_fewshot_test_data(config, common_data)
-
-    ## save SL data for few mixed cancer types
-    save_mix_subset_data(config, common_data, cancers=['CESC','LUAD'])
-    save_mix_subset_data(config, common_data, cancers=['COAD','LUAD','OV'])
-
-    ### save ELISL benchmark data
-    # prepare_ELISL_data(config, common_data, ELISL_data_dir="./data/benchmark/ELISL_data")
-
-    ### obtain benchmark dataframes
-    # get_benchmark_df(config, common_data)
-
-
-    ### IDH1-DDR case study data
-    # prepare_IDH1_DDR_data(common_data, cancer="COAD")
-
-    ### GBM cancer SL data
-    # prepare_GBM_data(common_data)
-
-    ## MiSL candidates of IDH1
-    # prepare_MiSL_IDH1_data(cancer='LAML')
-
-    ## PTEN-SL in GBM
-    # prepare_PTEN_GBM_data(common_data, cancer="Glioma")
-
-    ## MAT2A-PRMT5 in all cancers
-    # prepare_PRMT5_MAT2A_data(common_data)
-
-    ## single IDH1-PRKDC pair in all cancers
-    # prepare_IDH1_PRKDC_data(common_data)
-
-    ### save SL independent test data
-        
-    # data_total = prepare_SL_data(
-    #     config=config,
-    #     cancer="all",
-    #     common_data=common_data,
-    #     type="downstream"
-    # )
-
-    # save_independent_test_data(config, data_total)
-
-
-    ### calculate random AUPR
-    # get_random_aupr_f1(config, common_data)
 

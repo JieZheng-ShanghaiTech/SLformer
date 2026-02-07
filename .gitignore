@@ -3,13 +3,9 @@
 /experiment
 /wandb
 /sh
-/preprocess.ipynb
-/SL_downstream.ipynb
-/IDH1_analysis.ipynb
-/config
+/*.ipynb
+/config/old
 /config/cancer_specific
-/config/cancer_specific2.yaml
-/emb_plot.ipynb
+/config/bulk
 /att_emb
-/indep_test_inference.ipynb
-/IDH1_analysis.ipynb
+*__pycache__

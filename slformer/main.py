@@ -4,52 +4,43 @@ import easydict
 import logging
 
 from util import set_seed
-# from preprocess import Data_Preprocess
-from task import Validation_Experiment
-
+from task import EXPERIMENT_REGISTRY
+from task import Training_Models, Inference
+from preprocess import Data_Preprocess
 
 
 parser = argparse.ArgumentParser(description='SL prediction')
 
-parser.add_argument('--data_config_file', type=str, default="./config/data_preprocess.yaml",
+parser.add_argument('--data_config_file', type=str, required=True,
                     help='data preprocess config file path')
-# parser.add_argument('--config_file', type=str, default="./config/mix.yaml",
-#                     help='config file path')
-parser.add_argument('--config_file', type=str, default="./config/get_emb_IDH1_PRKDC.yaml",
-                    help='config file path')
-# parser.add_argument('--config_file', type=str, default="config/IDH1_permute.yaml",
-#                     help='config file path')
-# parser.add_argument('--config_file', type=str, default="./config/get_att.yaml",
-#                     help='config file path')
+parser.add_argument('--config_file', type=str, required=True,
+                    help='experiment config file path')
 parser.add_argument('--wandb_track', type=int, default=0,
                     help='whether to track model performance on wandb')
-parser.add_argument('--save_model', type=int, default=0,
+parser.add_argument('--save_model', type=int, default=1,
                     help='whether to save the model checkpoints')
 parser.add_argument('--save_result', type=int, default=1,
                     help='whether to save the performance of the models')
 
 parser.add_argument('--n', type=int, default=10,
-                    help='genesentence length n')
+                    help='genesentence length')
 parser.add_argument('--add_kg', type=int, default=1,
-                    help='whether to add KG embedding')
-parser.add_argument('--augmentation', type=str, default=None,
-                    help='whether to augment the gene sentence input')
-parser.add_argument('--anchor', type=int, default=1,
-                    help='whether to include the head anchor gene in a gene sentence')
+                    help='whether to concatenate with knowledge graph embedding')
 
 parser.add_argument('--device', type=int, default=0,
                     help='which gpu to use if any (default: 0)')
 parser.add_argument('--batch_size', type=int, default=512,
                     help='input batch size for training (default: 512)')
 parser.add_argument('--epochs', type=int, default=200,
-                    help='number of epochs to train')
+                    help='training epochs')
 parser.add_argument('--early_stop', type=int, default=5,
                     help="Early stopping patience")
-# optimizer
+# these are used for SLformer model only
 parser.add_argument('--transformer_lr', type=float, default=1e-5,
-                    help='learning rate (default: 5e-5)')
+                    help='learning rate for transformer encoder (default: 5e-5)')
 parser.add_argument('--predictor_lr', type=float, default=1e-4,
-                    help='learning rate (default: 1e-4)')
+                    help='learning rate for MLP predictor (default: 1e-4)')
+## optimizer params
 parser.add_argument('--betas', type=tuple, default=(0.9, 0.99),
                     help='')
 parser.add_argument('--eps', type=float, default=1e-05,
@@ -60,14 +51,14 @@ parser.add_argument('--lr_factor', type=float, default=0.5,
                     help='')
 parser.add_argument('--lr_patience', type=float, default=3,
                     help='')
-# MLP
+# MLP predictor
 parser.add_argument('--mlp_input_dim', type=int, default=256*2,
                     help='input dim for MLP')
 parser.add_argument('--mlp_hidden_dim', type=int, default=256,
                     help='hidden dim for MLP')
 parser.add_argument('--mlp_output_dim', type=int, default=1,
                     help='output dim for MLP')
-# Transformer
+# Transformer encoder
 parser.add_argument('--d_model', type=int, default=256*2,
                     help='')
 parser.add_argument('--n_head', type=int, default=1,
@@ -88,7 +79,6 @@ parser.add_argument('--random_init', type=int, default=1,
                     help='')
 
 
-
 args = parser.parse_args()
 logging.basicConfig(level=logging.INFO)
 
@@ -98,101 +88,36 @@ with open(args.data_config_file, 'r') as f:
     data_config = easydict.EasyDict(yaml.safe_load(f))
 with open(args.config_file, 'r') as f:
     config = easydict.EasyDict(yaml.safe_load(f))
+            
+    
+experiment = args.config_file.split('/')[-1].split('.yaml')[0]
+if experiment not in EXPERIMENT_REGISTRY:
+    raise ValueError(f"Invalid experiment setting for {experiment}. Please choose from {', '.join(EXPERIMENT_REGISTRY.keys())}")
+experiment_mode = EXPERIMENT_REGISTRY[experiment]
 
-#################################################
-# Override args with parameters from the config file only for cancer-specific tasks
-if config.task.type == "cancer_specific":
-    for key, value in config.params.items():
-        # Convert specific parameters to the correct types
-        if key in ['dropout', 'eps', 'weight_decay', 'transformer_lr', 'predictor_lr']:
-            setattr(args, key, float(value))
-        elif key in ['batch_size', 'n_head', 'num_layers', 'n', 'early_stop', 'lr_patience', 'device']:
-            setattr(args, key, int(value))
-        else:
-            setattr(args, key, value)
-# if you pass a parameter via the command line, it will take precedence over the YAML file 
-# command-line arguments have the highest priority
-#################################################
-
-
-if "pretrain" in args.config_file:
-    from preprocess_sc import Data_Preprocess
-else:
-    from preprocess import Data_Preprocess
 
 data_preprocess = Data_Preprocess(data_config)
 common_data = data_preprocess.get_common_data(sent_n=200)
 
 
-experiment_set = Validation_Experiment(
-    config=config,
-    args = args,
-    common_data=common_data,
-)
-
-
-if "pretrain" in args.config_file:
-
-    from preprocess_sc import Data_Preprocess
-
-    experiment_set.gsent_pretrain(
-        save_model=args.save_model,
-        save_result=args.save_result,
+if experiment_mode == "train":
+    experiment_set = Training_Models(
+        config=config,
+        args = args,
+        common_data=common_data,
     )
-
-
-elif "cancer_specific" in args.config_file or "mix" in args.config_file or "cross_cancer" in args.config_file:
-    ### train and test
     experiment_set.run_experiment(
         save_model=args.save_model,
         save_result=args.save_result,
         wandb_track=args.wandb_track,
     )
+elif experiment_mode == "inference":
+    experiment_set = Inference(
+        config=config,
+        args = args,
+        common_data=common_data,
+    )
+    experiment_set.run_experiment(experiment)
 
 
-# elif "IDH1_inference" in args.config_file:
-elif "IDH1_inference" in args.config_file or "PTEN_inference" in args.config_file or "PRMT5_MAT2A_inference" in args.config_file or "IDH1_PRKDC_inference" in args.config_file:
-    ### Infer IDH1-PRKDC
-    experiment_set.infer_primpartner()
-
-
-elif "IDH1_permute" in args.config_file or "PRMT5_MAT2A_permute" in args.config_file:
-    ## IDH1 random permute
-    # experiment_set.permut_primpartner(n_sample=1000, 
-    #                                 model_path="./experiment/mix_add_GBM/transformer/2024-11-28-11:30:19", 
-    #                                 model_type='transformer', cancer='Glioma')
-    cancer = config.task.cancer
-    for name, model_path in config.model.items():
-        # experiment_set.permut_primpartner(n_sample=1000, n_iter=20,
-        #                             model_path=model_path, savename=name, 
-        #                             model_type='transformer', cancer=cancer)
-        experiment_set.permut_primpartner(n_sample=1000, n_iter=10,
-                                    model_path=model_path, savename=name, 
-                                    model_type='transformer', cancer=cancer)
-
-
-elif "independent_test" in args.config_file:
-    ### independent test
-    # experiment_set.independent_test()
-    # experiment_set.independent_test(stat=True)
-    # experiment_set.independent_test_on_mix()
-    # experiment_set.independent_test_on_mix(save_raw=True)
-    # experiment_set.independent_test_on_mix(save_raw=True, random_simu=True)
-    experiment_set.independent_test_on_mix(save_raw=True, raw_score=True, random_simu=False)
-
-elif "all_inference" in args.config_file:
-    experiment_set.infer_all(output_att=False, output_emb=True)
-
-elif "att" in args.config_file:
-    experiment_set.get_att()
-
-elif "emb" in args.config_file:
-    experiment_set.get_emb()
-
-elif "fewshot" in args.config_file:
-    # experiment_set.fewshot_train()
-    # experiment_set.fewshot_test(test='mix_fewshot')
-    # experiment_set.fewshot_test(test='cancer_specific')
-
-    experiment_set.finetune_GBM()
 

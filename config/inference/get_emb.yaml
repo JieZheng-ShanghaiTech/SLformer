@@ -1,0 +1,17 @@
+EXPERIMENT_DIR: ./experiment
+SAVED_DATA_DIR: ./data/saved_data
+sc_dir: /data/xinliu/GeneSentence/TISCH2/
+
+SL_data_dir: ./data/SL_data
+
+task:
+  type: emb
+  name: IDH1_PRKDC_emb
+  primary_gene: IDH1
+  partner_gene: PRKDC
+  cancer: COAD
+  model:
+    model_name0: path_to_model
+    model_name1: path_to_model
+    # ...
+    

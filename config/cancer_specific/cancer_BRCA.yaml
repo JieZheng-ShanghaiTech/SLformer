@@ -21,7 +21,7 @@ SL_dataset:
 params:
   wandb_track: 0
   save_model: 0
-  add_att: 1
+  add_att: 1 
   att_nhead: 2
   batch_size: 512
   transformer_hidden_dim: 256

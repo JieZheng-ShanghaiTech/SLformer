@@ -5,13 +5,10 @@ sc_dir: /data/xinliu/GeneSentence/TISCH2/
 
 SL_data_dir: /home/jienihu/sc/SLformer/data/SL_data
 
-# model_type = "geneformer" or "transformer"
-model_type: transformer
+model_type: transformer  ## "geneformer" or "transformer"
 
-# task = cancer_specific, mix, or cross_cancer
 task: 
-  # type: cross_cancer
-  type: cross_cancer_all
+  type: cross_cancer
   cancer: [KIRC, COAD, LAML, OV, BRCA, CESC, SKCM, LUAD]
 
 SL_dataset:
