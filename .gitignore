@@ -9,3 +9,4 @@
 /config/bulk
 /att_emb
 *__pycache__
+/.vscode

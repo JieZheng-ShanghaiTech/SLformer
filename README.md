@@ -1,6 +1,8 @@
 # SLformer
 **SLformer** is a Transformer-based framework for predicting context-specific synthetic lethal (SL) interactions from single-cell RNA-seq data. It represents each gene as a co-expression gene sentence, enabling language-model architectures to capture context-dependent gene interaction rewiring. 
 
+<img src="fig/SLformer_overview.png"  height="80%" />
+
 ## Environment Setup
 ```bash
 git clone https://github.com/JieZheng-ShanghaiTech/SLformer.git
@@ -13,7 +15,7 @@ pip install -r requirements.txt
 ## Preparing Input Data
 
 ### Gene Sentence construction
-We provide precomputed gene sentence data derived from the single-cell expression data we used in this study, along with other auxiliary data required for later model training and downstram analyses, which can be downloaded [here](link). 
+We provide precomputed gene sentence data derived from the single-cell expression data we used in this study, along with other auxiliary data required for later model training and downstream analyses, which can be downloaded [here](https://doi.org/10.5281/zenodo.18733691). 
 
 If users wish to construct gene sentences from their own single-cell datasets, follow the instructions below.
 
