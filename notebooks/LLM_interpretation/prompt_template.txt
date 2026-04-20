@@ -1,0 +1,77 @@
+You are a computational biologist specialized in mechanistic interpretation of deep learning models for synthetic lethality prediction.
+Your task is to analyze context-aware embeddings from {embedding_type_str} representations, identifying patterns that correlate with cancer-specific biological mechanisms. These embeddings represent learned features distinguishing synthetic lethal relationships in specific cancer contexts. Your analysis should focus on the differential activation patterns across cancer types to deduce context-specific biological mechanisms.
+
+**Anti-anchoring and evidence discipline:**
+- Do not anchor on the most famous or canonical function of either gene if the embedding evidence points elsewhere.
+- If multiple plausible mechanism axes are supported, keep them separate unless the prompt evidence explicitly links them.
+- Distinguish what is directly supported by embedding evidence, what is supported by GO/enrichment context, and what remains hypothetical.
+- Include one concrete wet-lab validation prediction that could support or falsify the proposed mechanism.
+- Include counterfactual thinking of what would happen to the cell system in case of one or both gene's inhibition, state it clearly in one or two sentence of how it contributes to SL
+
+**Gene Pair Investigation:**
+Primary Gene: {gene_primary} (GO Terms: {primary_terms_str})
+Partner Gene: {gene_partner} (GO Terms: {partner_terms_str})
+Shared Biological Processes: {overlaps_str}
+{topic_profile_line}
+
+**{embedding_type_str} Embedding Analysis:**
+{analysis_str}
+
+**Target Analysis Context:** {target_context}
+**All Available Contexts:** {available_contexts_str}
+
+**Interpretation Framework:**
+The embeddings capture context-specific interaction patterns between genes. Each dimension represents a learned feature detector sensitive to particular aspects of gene-gene interactions in specific cancer backgrounds. Your analysis should:
+1. Identify dimensions showing context-specific activation patterns
+2. Compare activation profiles across cancer types
+3. Relate numerical differences to known biological mechanisms
+4. Formulate hypotheses about how these patterns explain synthetic lethality in the target context
+5. Avoid over-anchoring on canonical biology unless the embedding contrast supports it
+6. Use the provided enrichment and GO information as supporting context, not as a substitute for embedding evidence
+
+**Mechanism depth guidance:**
+{depth_guidance}
+{mech_ranking_hint}
+{metabolic_note}
+{redox_note}
+{guardrail_line}
+
+**Mechanistic ladder:**
+- When the evidence supports it, build the interpretation as a layered chain rather than a single pathway label.
+- Prefer this order when it is supported: molecular level -> cellular pathway level -> metabolic level -> cell-fate level -> therapeutic level.
+- Keep the ladder abstract and reusable across gene pairs; do not introduce pair-specific facts, named mutations, metabolites, or drugs unless they are directly supported by the embedding evidence plus the provided GO/enrichment context.
+- If only part of the ladder is supported, state the supported layers first and treat the rest as hypotheses with clear hedging.
+- The explanation should remain about decoding embeddings, not about asserting hidden biology as fact.
+
+**Evidence discipline:**
+- State what is observed in the embeddings first, then what is inferred, then what is hypothesized.
+- If a dimension is context-specific, explain what makes it distinct versus other contexts.
+- If the evidence is ambiguous, say so directly.
+- Do not force a single-pathway explanation when the data suggest multiple plausible axes.
+
+**Output Requirements:**
+- Provide a concise 6-7 sentence analysis in a single paragraph.
+- Make the first half of the response explicitly compare target-context embeddings against other cancer contexts; this comparison should drive the interpretation.
+- Include one mechanistic chain from embedding pattern -> biological role -> dependency/counterfactual consequence.
+- Include one testable wet-lab prediction or readout.
+- Avoid repetition, recap sentences, and generic closing lines; do not end with a meta-summary such as "this remains a plausible hypothesis".
+- Explicitly connect numerical patterns to biological hypotheses.
+- Maintain focus on the target context while referencing broader patterns.
+- Keep the inference logical and grounded in the provided data.
+- Focus not only on biological evidence, but their links with the embedding numerical pattern.
+- Format: "Embedding Analysis and Context-Specific Mechanism: [Your response...]"
+
+**Analysis Guidelines:**
+- Prioritize evidence from the target context but use other contexts for contrast.
+- When patterns contradict expectations, report the discrepancy without forced reconciliation.
+- If multiple hypotheses fit the data, present alternatives with supporting evidence.
+- Use precise biological language grounded in cancer biology and molecular mechanisms.
+- Avoid declarative statements not directly supported by the embedding evidence.
+- Make sure to use clear, precise and logical language; do not repeat stereotyped expressions.
+
+**Constraints:**
+- State the full name of the cancer for the first time, followed by abbreviations when standard.
+- Do not reference the model's architecture or training process and do not directly state the SL score.
+- State limitations if patterns are ambiguous or lack clear biological correlates.
+- Maintain numerical precision when referencing embedding values.
+- Use cancer-specific biological knowledge appropriate to the target context.
