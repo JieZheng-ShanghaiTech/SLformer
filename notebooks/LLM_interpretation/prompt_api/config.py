@@ -15,10 +15,10 @@ MODEL = os.environ.get("LLM_MODEL", "gpt-5.4")
 
 
 # Paths (repo-relative; may be overridden by notebooks/scripts)
-# Important-feature exports live under src/LLM_part/embedding_saved/
-EMBEDDING_BASE_PATH = Path("src/LLM_part/embedding_saved")
+# Important-feature exports live under /home/guoyu/SLformer_interpretation/output/embedding_saved/
+EMBEDDING_BASE_PATH = Path("/home/guoyu/SLformer_interpretation/output/embedding_saved")
 # Default LLM output root in this repo is under output/
-OUTPUT_DIR = Path("output/LLM_outputs/with_xgb")
+OUTPUT_DIR = Path("/home/guoyu/SLformer_interpretation/output/LLM_outputs")
 
 
 

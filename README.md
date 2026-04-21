@@ -97,4 +97,8 @@ python slformer/main.py \
 ## Analysis and Visualization
 Scripts and notebooks for generating figures and additional analysis in this study can be found under `notebooks/`.
 
+>[!NOTE]
+> Running `/notebooks/LLM_interpretation` requires setting up your own LLM API keys in `notebooks/LLM_interpretation/prompt_api/config.py` first
+
+
 ## How to Cite
