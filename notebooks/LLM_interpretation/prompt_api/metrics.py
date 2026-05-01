@@ -31,10 +31,7 @@ def extract_dim_ids(text: str) -> Set[int]:
     """Extract integer dim ids from tokens like 'dim_24'."""
     out: Set[int] = set()
     for m in _DIM_RE.finditer(text or ""):
-        try:
-            out.add(int(m.group(1)))
-        except Exception:
-            continue
+        out.add(int(m.group(1)))
     return out
 
 
