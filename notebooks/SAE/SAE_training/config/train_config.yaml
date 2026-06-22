@@ -1,0 +1,80 @@
+# SAE training config (YAML)
+#
+# Guidelines:
+# - Keep all keys explicit; code does not use default fallbacks.
+# - model.d_hidden is the SAE latent width.
+# - scope.cancer may be one cancer name or mix.
+# - scope.cancer: mix requires aligned prediction/embedding artifacts containing the 8 benchmark cancers plus Glioma.
+# - Completed mix artifacts should use data/all_SL/mix9_alignment/mix9_slformer_kg_crossemb.pkl
+#   and data/all_SL/mix9_alignment/pred_mix9_slformer_kg_cv*.csv.
+# - scope.max_samples may be null to use all selected rows.
+# - train.val_split must be in (0, 1).
+# - paths must be absolute so notebooks/scripts are location-independent.
+
+paths:
+  embeddings_pkl: /home/guoyu/SLformer_interpretation/data/all_SL/mix9_alignment/mix9_slformer_kg_crossemb.pkl
+  prediction_csvs:
+    - /home/guoyu/SLformer_interpretation/data/all_SL/mix9_alignment/pred_mix9_slformer_kg_cv1.csv
+    - /home/guoyu/SLformer_interpretation/data/all_SL/mix9_alignment/pred_mix9_slformer_kg_cv2.csv
+    - /home/guoyu/SLformer_interpretation/data/all_SL/mix9_alignment/pred_mix9_slformer_kg_cv3.csv
+    - /home/guoyu/SLformer_interpretation/data/all_SL/mix9_alignment/pred_mix9_slformer_kg_cv4.csv
+    - /home/guoyu/SLformer_interpretation/data/all_SL/mix9_alignment/pred_mix9_slformer_kg_cv5.csv
+  output_base_dir: /home/guoyu/SLformer_interpretation/output/SAE
+  slformer_output_subdir: slformer
+  groundtruth_texts_csv: /home/guoyu/SLformer_interpretation/data/explanation_groundtruth/groundtruth_texts.csv
+  medcpt_query_encoder: /data/guoyu/HF-models/MedCPT-Query-Encoder
+  groundtruth_dir: /home/guoyu/SLformer_interpretation/data/explanation_groundtruth
+scope:
+  cancer: mix
+  max_samples: null
+  seed: 42
+  score_col: score
+
+normalization:
+  type: zscore
+  eps: 1.0e-8
+
+model:
+  d_in: 1024
+  d_hidden: 4096
+  activation: jumprelu
+  orth_weight: 1
+  decoder_unit_norm: true
+  topk: 64
+  gate_weight: 0.5
+  jump_threshold: 0.0
+
+train:
+  epochs: 100
+  batch_size: 512
+  lr: 0.0005
+  weight_decay: 0.01
+  grad_clip: 1.0
+  device: cuda
+  log_every: 50
+  val_split: 0.1
+  val_every_epoch: true
+  amp: false
+  scheduler_type: none
+  scheduler_eta_min: 0.0
+  save_ckpt: true
+  ckpt_every_n_epochs: 40
+  use_saved_ckpt: false
+
+wandb:
+  enabled: true
+  project: SLformer-SAE
+  entity: null
+  mode: online
+  key: switch_to_your_own_key
+  tags:
+    - sae
+    - slformer
+    - mix
+
+analysis:
+  tangent_dim: 32
+  pca_components: 30
+  tsne_max_points: 1200
+  tsne_perplexity: 30
+  active_eps: 1.0e-6

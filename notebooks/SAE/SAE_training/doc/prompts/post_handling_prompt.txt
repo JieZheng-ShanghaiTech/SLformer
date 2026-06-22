@@ -1,0 +1,107 @@
+[self_refine_feedback]
+You are a strict biological mechanism editor reviewing a draft explanation generated from SAE/SLformer model evidence.
+
+Hard rules:
+- Use the ORIGINAL USER PROMPT and the MODEL RESPONSE as the evidence boundary, plus broad biology-prior knowledge only when the ORIGINAL USER PROMPT explicitly permits it.
+- Preserve the Markdown output format required by the ORIGINAL USER PROMPT exactly.
+- Preserve required dictionary-atom visibility: do not remove representative feature IDs or compact geometry/rank evidence when requested.
+- Do not reward surface GO-term summaries. The draft should contain a pruned deep mechanism: molecular perturbation -> pathway defect or stress load -> compensatory dependency -> SL counterfactual.
+- Check whether disease-canonical biology-prior claims are pruned by the SAE atoms rather than merely appended.
+- Flag causal overstatement, shallow biological restatement, missing directional wet-lab expectations, unsupported mutation/metabolite specificity, redundant atom listing, and meta-reasoning phrases such as "pruned mechanism", "pruned biological assumption", "rather than simply", "not merely", "not just", or "retained only" when they appear in the final report instead of the prompt reasoning.
+- Keep feedback concise and actionable: identify the 2-4 highest-impact revisions, including report-tone cleanup when present.
+
+ORIGINAL USER PROMPT:
+{original_prompt}
+
+MODEL RESPONSE:
+{model_response}
+
+Return concise feedback only.
+
+[self_refine_rewrite]
+Revise the MODEL RESPONSE using the FEEDBACK.
+
+Rules:
+- Preserve the Markdown output format required by the ORIGINAL USER PROMPT exactly.
+- Keep correct draft wording only when it contributes to the deep causal mechanism.
+- Remove surface GO-like statements, redundant atom listing, generic stress-language that does not advance the chain, and intermediate prompt-thinking phrases such as "pruned mechanism", "rather than simply", "not merely", "not just", or "retained only".
+- Preserve compact representative feature IDs and local geometry when requested.
+- Do not introduce new numeric values, papers, datasets, study-specific wet-lab outcomes, or drugs.
+- You may retain disease-canonical biology-prior hypotheses only when they are explicitly framed as inferred and pruned by the SAE evidence.
+- Improve the response by making it deeper, more causal, more concise, and report-facing rather than process-facing.
+
+ORIGINAL USER PROMPT:
+{original_prompt}
+
+MODEL RESPONSE:
+{model_response}
+
+FEEDBACK:
+{feedback}
+
+Return only the revised response.
+
+[cove_questions]
+Generate adversarial biological-validity questions for the DRAFT RESPONSE.
+
+Rules:
+- Write exactly {n_questions} questions.
+- Do not ask plain format or bookkeeping questions unless the draft visibly violates the format.
+- Each question must pressure-test a deep biological inference, not a basic fact.
+- At least one question must ask whether the proposed disease-canonical mechanism is constrained by the SAE atom pattern rather than imported from prior biology, without using meta-reasoning language in the final report.
+- At least one question must ask whether the mechanism specifies a directional wet-lab expectation, such as what should increase, decrease, fail, or be rescued.
+- At least one question must ask whether any mutation/metabolite/repair-subpathway claim is over-specific relative to the prompt evidence.
+- At least one question must ask whether an alternative mechanism supported by the atoms has been unfairly discarded.
+- At least one question must ask whether the final report contains process-facing phrases such as "pruned mechanism", "rather than simply", "not merely", "not just", or "retained only" that should be rewritten as scientific conclusions.
+- Prefer questions that could plausibly produce WEAK or FAIL answers for a strong model's draft.
+- Output only numbered questions.
+
+ORIGINAL USER PROMPT:
+{original_prompt}
+
+DRAFT RESPONSE:
+{draft_response}
+
+[cove_answers]
+Answer the adversarial verification questions using the ORIGINAL USER PROMPT and the DRAFT RESPONSE.
+
+Rules:
+- For each question, write one line starting with "A:".
+- Use PASS, WEAK, or FAIL, followed by one concise reason.
+- PASS means the draft is biologically deep, evidence-pruned, and appropriately hedged.
+- WEAK means the claim is plausible but shallow, under-pruned by SAE evidence, too generic, or missing directional experimental consequences.
+- FAIL means the claim is unsupported, over-specific, contradicted by the prompt, or mostly prior biology without model-evidence pruning.
+- Treat broad gene/pathway biology and explicitly permitted disease-canonical biology-prior inference as allowed only when pruned by SAE evidence.
+- Do not add citations, external study results, drugs, exact mutations, or wet-lab facts absent from the ORIGINAL USER PROMPT.
+
+ORIGINAL USER PROMPT:
+{original_prompt}
+
+DRAFT RESPONSE:
+{draft_response}
+
+VERIFICATION QUESTIONS:
+{questions}
+
+[cove_revise]
+Revise the DRAFT RESPONSE using the verification answers.
+
+Rules:
+- Preserve the Markdown output format required by the ORIGINAL USER PROMPT exactly.
+- Revise every WEAK or FAIL point.
+- If an inference is WEAK because it is too generic, make it more causal and directional.
+- If report-facing tone is WEAK because process language remains, rewrite it as a direct scientific conclusion without changing the evidence boundary.
+- If an inference is WEAK or FAIL because it is not pruned by SAE evidence, either connect it to specific dominant atom families or remove it.
+- If an inference is over-specific, weaken it to a biology-prior hypothesis and name the missing evidence.
+- Preserve compact representative feature IDs, local geometry, and sign-aware interpretation when required.
+- Do not expand the final interpretation beyond the requested length.
+- Return only the revised response.
+
+ORIGINAL USER PROMPT:
+{original_prompt}
+
+DRAFT RESPONSE:
+{draft_response}
+
+VERIFICATION ANSWERS:
+{verification_answers}

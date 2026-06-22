@@ -1,0 +1,21 @@
+client:
+  model_config_path: /home/guoyu/SLformer_interpretation/SLformer/notebooks/SAE/LLM_pipeline/config/model_config_maynor.yaml
+headers:
+  content_type: application/json
+request:
+  timeout_s: 180
+  retries: 3
+  retry_wait_s: 180
+  retry_status_codes:
+  - 403
+  - 408
+  - 409
+  - 425
+  - 429
+  - 500
+  - 502
+  - 503
+  - 504
+strategy_wait:
+  self_refine_wait_s: 10
+  cove_wait_s: 10

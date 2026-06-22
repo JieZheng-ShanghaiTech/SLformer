@@ -1,0 +1,20 @@
+model:
+  base_url: switch_to_your_own_url
+  pinned_ip: switch_to_your_own_ip
+  api_key: switch_to_your_own_key
+  api_mode: response
+  user_agent: switch_to_your_own_user_agent
+  stream: true
+  name: gpt-5.4
+  system_prompt: You are a computational biologist specialized in mechanistic interpretation of deep learning models for synthetic lethality prediction.
+  include_system_prompt: true
+  temperature: 0
+  top_p: 0.95
+  reasoning_effort: high
+  max_tokens: 1024
+strategy:
+  self_refine_rounds: 1
+  cove_num_questions: 5
+prompts:
+  prompt_dir: /home/guoyu/SLformer_interpretation/src/SAE/doc/prompts
+  post_handling_prompt: post_handling_prompt.txt

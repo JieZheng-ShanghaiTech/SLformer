@@ -98,7 +98,7 @@ python slformer/main.py \
 Scripts and notebooks for generating figures and additional analysis in this study can be found under `notebooks/`.
 
 >[!NOTE]
-> Running `/notebooks/LLM_interpretation` requires setting up your own LLM API keys in `notebooks/LLM_interpretation/prompt_api/config.py` first
+> Running `/notebooks/LLM_interpretation` requires configuring `notebooks/LLM_interpretation/prompt_api/client_config.yaml`; model endpoint settings are read from the configured `model_config_dir/model_config.yaml`.
 
 
 ## How to Cite

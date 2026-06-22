@@ -1,0 +1,52 @@
+# Manifold and projection config (YAML)
+#
+# Hard constraints (validated in code, never silently clamped):
+# - projection.tangent_dim <= projection.default_neighbors - 1
+# - projection.tangent_dim <= projection.neighbor_min - 1
+# - analysis.knn_k < analysis.subsample_max
+# - analysis.geo_k < analysis.subsample_max
+
+model_dims:
+  d_in: 1024
+  d_hidden: 4096
+
+projection:
+  metric: cosine
+  tangent_dim: 24
+  ridge_alpha: 0.001
+  default_neighbors: 25
+  neighbor_min: 35
+  neighbor_max: 400
+  neighbor_step: 10
+  fd_eps: 0.001
+  topk_features: 20
+  decoder_lasso_alpha: 0.0005
+  decoder_lasso_grid_size: 10
+  arrow_scale: 0.7
+
+analysis:
+  subsample_max: 1200
+  knn_k: 30
+  geo_k: 25
+  ridge_alpha: 0.001
+
+comparison:
+  fit_k: 200
+  ridge_rho: 1.0e-3
+  distance_method: mapper-nerve
+  triplet_distance_method: chart-euclidean
+  nerve_lens_dims: [0, 1]
+  nerve_covers: 6
+  nerve_overlap: 0.35
+  nerve_cover_mode: all-intersecting
+  nerve_cover_core_fraction: 0.10
+  nerve_cluster_mode: cover
+  nerve_dbscan_eps_quantile: 0.65
+  nerve_dbscan_min_samples: 3
+  nerve_fallback_unreachable: true
+  ks: [10, 20, 30, 50, 70, 100, 150, 200]
+  high_score_pool: 1200
+  top_positive: 300
+  top_score: 300
+  max_anchors: 400
+  low_score_anchor_count: 80

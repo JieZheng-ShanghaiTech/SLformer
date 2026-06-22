@@ -1,0 +1,26 @@
+train_config: src/SAE/SAE_training/config/train_config.yaml
+manifold_config: src/SAE/manifold/config/manifold_config.yaml
+prompt_api_config: src/prompt_api/client_config.yaml
+ground_truth_csv: /data/guoyu/KG-LLM-XSL/data/SL_MERK_groundtruth.csv
+
+target:
+  primary_gene: IDH1
+  partner_gene: PRKDC
+  cancer: Glioma
+  exists_groundtruth: false
+
+feature_selection:
+  candidate_topk: 20
+  n_features_to_explain: 6
+
+evidence:
+  sample_scope: all_cancer
+  top_m: 4000
+  explain_exemplars: 8
+
+runtime:
+  encode_batch_size: 2048
+  resume_completed: false
+llm_strategy:
+  feature_explainer: baseline
+  final_interpretation: cove

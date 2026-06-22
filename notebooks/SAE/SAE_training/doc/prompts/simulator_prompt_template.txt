@@ -1,0 +1,36 @@
+You are a computational biologist acting as a simulator for an SAE dictionary-atom hypothesis in synthetic-lethality embeddings.
+
+## Feature hypothesis
+Feature {feature}: {hypothesis}
+
+## Validation context
+- Target cancer context: {target_cancer}
+- Held-out evidence scope: {evidence_scope_label}
+
+## Held-out test pairs
+{test_pairs}
+
+## Task
+For each held-out pair, predict how strongly Feature {feature} should activate on a 0-10 scale. The score should reflect mechanistic agreement between the feature hypothesis and the held-out pair's gene functions in synthetic lethality, not lexical similarity or cancer-gene fame.
+
+## Biological reasoning rules
+- Use standard molecular/cancer-biology knowledge about the listed genes, including GO-like functional roles, pathway membership, repair/metabolic/signaling/checkpoint functions, and cancer-context relevance.
+- Compare functions across pairs: ask whether both genes plausibly participate in the same dependency, compensatory axis, pathway redundancy, stress-response state, or vulnerability described by the feature hypothesis.
+- Synthetic-lethality relevance matters more than single-gene annotation. A pair should score high only when the two-gene relationship plausibly matches the dependency encoded by the hypothesis.
+- Do not use hidden activation values, exact SL scores, or any external study-specific result. Do not assign high scores simply because a gene is famous in cancer.
+
+## Scoring rubric
+- 9-10: the pair strongly matches the exact SL-relevant dependency described by the hypothesis.
+- 6-8: the pair shares a major pathway, compensatory process, or vulnerability axis with the hypothesis, but not all details.
+- 3-5: the pair has a weak, indirect, or single-gene-only relationship to the hypothesis.
+- 0-2: the pair does not match the hypothesis or is better explained by a different process.
+
+## Consistency rules
+- Preserve cancer labels and pair names exactly as written.
+- Score every held-out pair exactly once.
+- Use the full 0-10 scale to rank mechanistic agreement.
+- Do not add reasoning text in the output.
+
+## Output format
+Return only one compact JSON object mapping each held-out pair name exactly as written above to one numeric predicted activation score. Do not omit, rename, reorder, abbreviate, or reverse any pair names:
+{{"Cancer:geneA-geneB": 0, "Cancer:geneC-geneD": 7}}

@@ -1,0 +1,37 @@
+You are a computational biologist interpreting one sparse autoencoder (SAE) dictionary atom from SLformer synthetic-lethality embeddings.
+
+## Analyzed context
+- Target cancer context: {target_cancer}
+- Evidence scope: {evidence_scope_label}
+- Feature ID: {feature}
+
+## Feature {feature} local geometric profile at the target pair
+- Baseline activation z0_j: {z0:.6f}
+- Directional sensitivity dot_z_j: {dot_z:.6f}
+- Finite-difference effect Delta_eps_z_j: {delta_z:.6f}
+- Decoder projection coefficient c_star_j: {c_star:.6f}
+- Joint rank score: {joint_rank_score:.6f}
+
+## Top activating pairs for this feature
+{top_pairs}
+
+## Activation exemplars for this feature
+{exemplars}
+
+## Task
+Infer the reusable biological function encoded by Feature {feature} across the sampled gene-pair contexts. The feature label should explain why multiple high-activation pairs share a synthetic-lethality-relevant biological role. Do not decode the atom only from the local geometry values; use the gene identities, cancer labels, and your standard molecular/cancer-biology knowledge to compare exemplar functions.
+
+## Analysis requirements
+- Compare functions across exemplars before naming the atom: identify recurring gene roles, pathway classes, cellular processes, cancer-context states, and SL-relevant dependencies shared by multiple high-activation pairs.
+- Use standard biological knowledge about the listed genes and pathways, including GO-like functional knowledge you already know, but do not invent study-specific facts, papers, drugs, mutations, or wet-lab results not implied by the gene functions.
+- Contrast high-activation pairs against weak/zero-control exemplars when present; use weak/zero examples as evidence for specificity, not as support.
+- Focus on synthetic lethality: describe what compensatory pathway, stress state, repair burden, metabolic vulnerability, checkpoint pressure, survival buffering, lineage state, or pathway redundancy the atom may mark.
+- Separate the global atom meaning from the analyzed target pair. Do not name, infer, restate, or explain the analyzed target gene pair; the only target-specific information you may mention is the cancer context: {target_cancer}.
+- Use the local geometric profile only to describe how active/relevant the atom is near the target point; do not infer biological repression or activation from the sign of `dot_z`, `delta_z`, or `c_star`.
+- Prefer mechanistic labels that are specific enough for final SL interpretation, e.g. "replication-coupled DNA damage checkpoint dependence" rather than "cell stress".
+- If exemplars mix several biological themes, state the dominant shared theme and a secondary theme instead of forcing one pathway.
+
+## Output format
+HYPOTHESIS: [one reusable SAE atom label, no markdown bold, no analyzed target pair]
+CONFIDENCE: [low / moderate / high]
+RATIONALE: [2-3 sentences. Identify the recurring biological process or pathway family, state the SL-relevant dependency or vulnerability. ]
