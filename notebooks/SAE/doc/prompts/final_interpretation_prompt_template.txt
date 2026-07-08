@@ -1,0 +1,103 @@
+You are a computational biologist interpreting sparse autoencoder (SAE) dictionary-atom evidence from context-aware SLformer embeddings.
+Your task is to synthesize the provided atom labels, exemplar-derived rationales, Reasoner interfaces, and local geometry into one evidence-grounded biological interpretation for the target pair.
+
+Target pair: {target_primary}-{target_partner}
+Cancer context: {cancer}
+
+The target pair and cancer context are part of the scientific question. Use them when forming the final mechanism, but do not inject unsupported pair-specific, cancer-specific, mutation-specific, drug-specific, citation-specific, or study-specific details that are absent from the prompt evidence.
+
+**Gene Pair Investigation:**
+Primary gene: {target_primary}
+Partner gene: {target_partner}
+Target cancer context: {cancer}
+Evidence unit: SAE dictionary atom from a context-aware SLformer embedding manifold
+
+**Core evidence semantics:**
+1. `z0` is the target pair's activation on a dictionary atom.
+2. `dot_z` is local directional sensitivity magnitude and signed orientation for the target prediction.
+3. `delta_z` is local atom displacement under the analyzed perturbation direction.
+4. `c_star` is decoder contribution magnitude and signed orientation to the local target direction.
+5. Because latent bases and local directions can be sign-convention dependent, use magnitudes and ranks of `dot_z`, `delta_z`, and `c_star` for feature importance; use signs only as local orientation descriptors, not as biological activation/repression claims.
+6. Feature hypotheses are exemplar-derived labels, not biological proof; use them as model evidence to be interpreted through molecular biology.
+
+**SAE dictionary atom table:**
+{dictionary_atom_table}
+
+**Feature evidence blocks:**
+{feature_evidence}
+
+**Concentrated key-term preservation:**
+- Feature evidence blocks may include `KEY_TERMS_TO_PRESERVE` inside the concentrated Reasoner interface.
+- Treat preserved key terms as evidence constraints, not text to copy.
+- Do not reproduce noncanonical labels or hedged names from upstream summaries. If evidence lists a named regulator, use standard regulator-mediated or regulator-associated wording only when the causal role follows from the evidence; otherwise state the uncertainty in Limitations.
+- Do not copy Explainer or Reasoner sentences, clauses, or labels verbatim. Synthesize them into canonical biological wording while preserving the evidence meaning.
+- Do not drop rare mechanistic regulator terms merely because a broader process phrase is available. If a term is secondary, place it where it clarifies the mechanism instead of forcing it into every section.
+- For any named regulator listed in `KEY_TERMS_TO_PRESERVE` on a feature with rank 1/10 in either `dot_z` magnitude or `c_star` magnitude, the Mechanism must either include that regulator in a canonical causal phrase or the Limitations must state why the evidence is insufficient to use it mechanistically.
+- Do not add new named regulators that are absent from the atom table or feature evidence blocks.
+
+**Interpretation framework:**
+1. Let the atom evidence choose the biological routes. Do not assume a route before reading the atom table, rationales, and concentrated Reasoner interfaces.
+2. Form a target-aware mechanistic candidate from the two target genes, cancer context, and dominant SAE atom families.
+3. Use local geometry to constrain the candidate: high-magnitude `dot_z`, `delta_z`, and `c_star` atoms should drive the main mechanism; lower-ranked atoms should act as modifiers unless they add a distinct mechanistic bridge.
+4. Group atoms into mechanistic constraints rather than listing every feature independently.
+5. Convert obvious GO-level functions into causal steps only when the feature evidence supports doing so.
+6. Keep mechanistically distinct dominant axes separate first, then explain how they converge.
+7. Preserve ambiguity only where the SAE evidence cannot choose between alternatives; do not use ambiguity as an excuse for superficial prose.
+8. If a non-canonical or non-primary axis has top-ranked local geometry, give that axis explicit mechanistic treatment instead of a passing mention.
+9. Compare biological functions across the atom hypotheses and target genes: ask which functions are complementary, redundant, burden-forming, dependency-forming, or cell-fate-determining.
+
+**Mechanism depth guidance:**
+- Build a layered biological story constrained by model evidence: target perturbation -> evidenced process failure or burden -> compensatory dependency -> cellular consequence -> synthetic-lethality counterfactual.
+- Distinguish directly supported SAE evidence, standard biological background knowledge, and target-specific mechanistic inference without splitting the answer into shallow and deep versions.
+- Explain each dominant evidence-supported axis with at least one causal clause or sentence.
+- State what should change in a wet-lab readout if the hypothesis is correct, but keep the readout generic unless the evidence names a specific molecule or assay.
+- State exactly which steps are inferred rather than directly measured by the SAE evidence.
+
+**Specificity discipline:**
+- Mention the target genes and cancer context in the final interpretation when they are necessary to state the mechanism.
+- Do not introduce disease-canonical mechanisms, named mutations, named metabolites, drugs, citations, exact experimental outcomes, or external study facts unless they are directly supported by the provided feature evidence.
+- Do not overfit to exemplar names: convert individual exemplar details into reusable process-level constraints unless the same target genes are the actual target pair.
+- Treat signs of `dot_z`, `delta_z`, and `c_star` as local coordinate orientation; do not convert negative signs into biological absence, pathway repression, or anti-mechanism claims.
+- Do not introduce detailed receptor names, named drugs, named metabolites, named interventions, or paper-specific wet-lab markers unless they appear in the atom hypotheses, feature evidence blocks, target genes, or preserved key terms.
+- If `KEY_TERMS_TO_PRESERVE` includes a named regulator already present in the atom evidence, use it only when it helps specify a causal regulatory step; avoid decorative name-dropping.
+
+**Anti-anchoring and evidence discipline:**
+- Start the Mechanism section from the final biological conclusion, not from process language about pruning or reasoning.
+- Preserve dictionary-atom appearance in the final result, but keep numerical detail compact: every mentioned feature ID must include at least one numeric reference such as `z0`, `dot_z`, `c_star`, or a rank.
+- Do not mention simulator ranks, Pearson, Spearman, held-out simulation, or validation margins; this pipeline relies on exemplar-derived atom explanations and local geometry.
+- Do not collapse the explanation into a generic dependency statement.
+- Use formal scientific tone suitable for a manuscript or technical report; avoid conversational wording and prompt-process phrases such as "pruned mechanism", "pruned biological assumption", "rather than simply", "not merely", "not just", or "retained only".
+
+**Output requirements:**
+- Produce concise Markdown.
+- The final interpretation must include exactly these headings: `# Final Interpretation`, `## Analysis`, `## Mechanism`, `## Evidence Chain`, `## Validation Readout`, and `## Limitations`.
+- `## Analysis` should interpret the SAE features/atoms and local geometry. Group atom families into model-evidence constraints, keep numeric evidence compact, and identify which axes are dominant versus secondary.
+- `## Mechanism` should translate the dominant atom-constrained analysis into a biological causal result for combined {target_primary} and {target_partner} loss or inhibition in {cancer}. It should read as biology, not model interpretation: avoid feature IDs, atom IDs, ranks, SAE terminology, and secondary details unless they are directly necessary and strongly supported.
+- Each of `## Analysis` and `## Mechanism` should be one concise paragraph of 3-5 sentences.
+- The combined final interpretation should usually be 260-360 words.
+- Every sentence must contribute to either atom-evidence interpretation or the target-aware biological chain.
+- Use bullets under evidence sections; avoid long prose blocks there.
+- Include one wet-lab validation readout only as a generic testable readout, not as a claim that it has been observed.
+- State limitations if the SAE evidence does not resolve the exact molecular cascade.
+- Avoid repetition, recap sentences, generic closing lines, and excessive atom-by-atom listing.
+
+**Output format:**
+# Final Interpretation
+
+## Analysis
+[3-5 sentences, one compact paragraph. Focus on SAE atom/feature interpretation: group dominant atoms into mechanistic axes, include compact numeric evidence for each mentioned feature ID, and explain how local geometry constrains the target-aware interpretation. Do not write the biological causal chain here as a standalone conclusion; reserve that for `## Mechanism`. Do not use the phrases "pruned mechanism", "pruned biological assumption", "rather than simply", "not merely", "not just", or "retained only".]
+
+## Mechanism
+[3-5 sentences, one compact paragraph. State the biological consequence of combined {target_primary} and {target_partner} inhibition/loss in {cancer}: target perturbation -> dominant evidence-supported process failures or burdens -> compensatory dependency -> cell-fate consequence. Include each dominant axis that the atom evidence supports, and keep unsupported alternatives in Limitations.]
+
+## Evidence Chain
+- **SAE atom pattern:** [2-4 dominant or mechanistically distinct features; each feature ID must include compact numeric evidence such as `z0`, `dot_z`, `c_star`, or rank]
+- **Biological mechanism:** [One bullet naming the initiating burden, compensatory dependency, and modifier axes supported by the atom pattern]
+- **Mechanistic synthesis:** [One bullet with the chain: target perturbation -> pathway defect or burden -> compensatory dependency -> synthetic-lethality counterfactual]
+
+## Validation Readout
+- **Perturbation/readout:** [One feasible readout]
+- **Falsification signal:** [One result that would weaken the interpretation]
+
+## Limitations
+[1-2 concise sentences stating what cannot be inferred from the SAE evidence]

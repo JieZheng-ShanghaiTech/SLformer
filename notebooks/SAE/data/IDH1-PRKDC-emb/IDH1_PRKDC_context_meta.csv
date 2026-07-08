@@ -1,0 +1,9 @@
+primary_gene,partner_gene,cancer,score,source_model_file,source_embedding_file,best_fold
+IDH1,PRKDC,BRCA,0.012468814,model_no_34_all_5folds.csv,/home/guoyu/SLformer_interpretation/data/experiment/emb/IDH1_PRKDC_emb/BRCA/model_no_34_crossemb.pkl,3
+IDH1,PRKDC,CESC,0.08433929,model_no_34_all_5folds.csv,/home/guoyu/SLformer_interpretation/data/experiment/emb/IDH1_PRKDC_emb/CESC/model_no_34_crossemb.pkl,3
+IDH1,PRKDC,COAD,0.2681132,model_no_34_all_5folds.csv,/home/guoyu/SLformer_interpretation/data/experiment/emb/IDH1_PRKDC_emb/COAD/model_no_34_crossemb.pkl,3
+IDH1,PRKDC,Glioma,0.43554983,model_no_34_all_5folds.csv,/home/guoyu/SLformer_interpretation/data/experiment/emb/IDH1_PRKDC_emb/Glioma/model_no_34_crossemb.pkl,3
+IDH1,PRKDC,LAML,0.002941014,model_no_34_all_5folds.csv,/home/guoyu/SLformer_interpretation/data/experiment/emb/IDH1_PRKDC_emb/LAML/model_no_34_crossemb.pkl,3
+IDH1,PRKDC,LUAD,0.020994686,model_no_34_all_5folds.csv,/home/guoyu/SLformer_interpretation/data/experiment/emb/IDH1_PRKDC_emb/LUAD/model_no_34_crossemb.pkl,3
+IDH1,PRKDC,OV,0.4179439,model_no_34_all_5folds.csv,/home/guoyu/SLformer_interpretation/data/experiment/emb/IDH1_PRKDC_emb/OV/model_no_34_crossemb.pkl,3
+IDH1,PRKDC,SKCM,0.90376437,model_no_34_all_5folds.csv,/home/guoyu/SLformer_interpretation/data/experiment/emb/IDH1_PRKDC_emb/SKCM/model_no_34_crossemb.pkl,3

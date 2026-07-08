@@ -1,0 +1,14 @@
+{
+  "source_scoring_dir": "/home/guoyu/SLformer_interpretation/data/experiment/inference/IDH1_PRKDC_single",
+  "source_embedding_dir": "/home/guoyu/SLformer_interpretation/data/experiment/emb/IDH1_PRKDC_emb",
+  "best_fold": 3,
+  "best_model_index": 27,
+  "best_model_file": "model_no_34_all_5folds.csv",
+  "best_glioma_avg_score": 0.5336285829544067,
+  "embedding_npy": "/home/guoyu/SLformer_interpretation/data/IDH1-PRKDC-emb/IDH1_PRKDC_context_embeddings.npy",
+  "meta_csv": "/home/guoyu/SLformer_interpretation/data/IDH1-PRKDC-emb/IDH1_PRKDC_context_meta.csv",
+  "shape": [
+    8,
+    1024
+  ]
+}
