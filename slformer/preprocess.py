@@ -204,11 +204,11 @@ class Data_Preprocess():
             token_dictionary_file=os.path.join(self.config.Geneformer_dir, "geneformer/token_dictionary.pkl")
         )
 
+        tisch_dir = self.config.sc_dir
         geneformer_dataset_fp = os.path.join(tisch_dir, "geneformer_tokenized/cancer_tokenized.dataset")
         if os.path.exists(geneformer_dataset_fp):
             print("GeneFormer tokenized data exists, skipping.")
         else:
-            tisch_dir = self.config.sc_dir
             tk.tokenize_data(
                 data_directory=self.data_path_repository["sc_processed"],
                 output_directory=os.path.join(tisch_dir, "geneformer_tokenized"),

@@ -320,9 +320,9 @@ class Inference():
 
     
     def _load_model_params(self, model_cfg):
-        with open(os.path.join(model_cfg.path, "params.json"), "r") as f:
+        model_path = model_cfg if isinstance(model_cfg, str) else model_cfg.path  
+        with open(os.path.join(model_path, "params.json"), "r") as f:
             model_params = json.load(f)
-        ## update model params
         for arg in vars(self.args):
             if arg in model_params:
                 setattr(self.args, arg, model_params[arg])
@@ -649,7 +649,7 @@ class Inference():
                     if arg in model_params:
                         setattr(self.args, arg, model_params[arg])
                 
-                transformer_config = self.config_transformer(self.args)
+                transformer_config = _config_transformer(self.args)
 
                 if model_type == 'geneformer':
                     loader = load_all_data_SL(data_iter, self.geneformer_emb_map, self.args.batch_size, add_kg=self.args.add_kg)

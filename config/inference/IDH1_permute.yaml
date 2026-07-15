@@ -5,9 +5,10 @@ SL_data_dir: ./data/SL_data
 
 task:
   type: permute_inference
+  name: IDH1_permute_reactome
   primary_gene: IDH1
+  cancer: Glioma
   gene_list: ./data/DDR_genelist/reactome_dna_repair.txt
 model:
   model_name0: path_to_model
   model_name1: path_to_model
-  # ...

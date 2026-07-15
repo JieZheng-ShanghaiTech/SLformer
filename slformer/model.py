@@ -96,6 +96,7 @@ class SLformer(nn.Module):
 
         h1 = self.encode_gsent(x1, mask1)
         h2 = self.encode_gsent(x2, mask2)
+        transformer_att = []  
         for _, layer in enumerate(self.transformer_encoder.layers):
             transformer_att.append(layer.attention_weights)
         ## [batch_size, num_layer, sent_len, sent_len]
@@ -186,7 +187,7 @@ class CrossAttention(nn.Module):
                 x2 = self.activation(x2)
 
         x1_output = scatter_mean(x1, mask1, dim=1)[:, 1:,].squeeze(1)
-        x2_output = scatter_mean(x2, mask1, dim=1)[:, 1:,].squeeze(1)
+        x2_output = scatter_mean(x2, mask2, dim=1)[:, 1:,].squeeze(1)
 
         if cat:
             return torch.cat([x1_output, x2_output], dim=-1)
