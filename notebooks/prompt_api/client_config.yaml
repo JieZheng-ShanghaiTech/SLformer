@@ -1,5 +1,5 @@
 client:
-  model_config_path: /home/guoyu/SLformer_interpretation/SLformer/notebooks/SAE/LLM_pipeline/config/model_config_maynor.yaml
+  model_config_path: ../SAE/LLM_pipeline/config/model_config_maynor.yaml
 headers:
   content_type: application/json
 request:
