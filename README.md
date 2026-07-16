@@ -1,7 +1,10 @@
 # SLformer
 **SLformer** is a Transformer-based framework for predicting context-specific synthetic lethal (SL) interactions from single-cell RNA-seq data. It represents each gene as a co-expression gene sentence, enabling language-model architectures to capture context-dependent gene interaction rewiring. 
 
-<img src="overview.png"  height="80%" />
+<img src="overview.png"  width="900" />
+
+<img src="SAE_overview.png" width="900" />
+
 
 ## Environment Setup
 ```bash
